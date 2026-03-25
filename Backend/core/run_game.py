@@ -5,7 +5,7 @@ from pathlib import Path
 
 from core.game_runner import GameRunner
 from core.state_manager import StateManager
-from core.validator import RuleValidator
+from Backend.core.rule_validator import RuleValidator
 
 
 def parse_args() -> argparse.Namespace:
