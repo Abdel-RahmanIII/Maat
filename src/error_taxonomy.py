@@ -1,0 +1,29 @@
+from __future__ import annotations
+
+from enum import Enum
+
+
+class ErrorType(str, Enum):
+    INVALID_PIECE = "INVALID_PIECE"
+    ILLEGAL_DESTINATION = "ILLEGAL_DESTINATION"
+    LEAVES_IN_CHECK = "LEAVES_IN_CHECK"
+    CASTLING_VIOLATION = "CASTLING_VIOLATION"
+    EN_PASSANT_VIOLATION = "EN_PASSANT_VIOLATION"
+    PROMOTION_ERROR = "PROMOTION_ERROR"
+    PARSE_ERROR = "PARSE_ERROR"
+    NO_OUTPUT = "NO_OUTPUT"
+
+
+SYMBOLIC_ERROR_TYPES: tuple[ErrorType, ...] = (
+    ErrorType.INVALID_PIECE,
+    ErrorType.ILLEGAL_DESTINATION,
+    ErrorType.LEAVES_IN_CHECK,
+    ErrorType.CASTLING_VIOLATION,
+    ErrorType.EN_PASSANT_VIOLATION,
+    ErrorType.PROMOTION_ERROR,
+)
+
+PARSER_ERROR_TYPES: tuple[ErrorType, ...] = (
+    ErrorType.PARSE_ERROR,
+    ErrorType.NO_OUTPUT,
+)
