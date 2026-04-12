@@ -45,6 +45,11 @@ class TurnState(TypedDict):
     critic_verdict: bool | None
     ground_truth_verdict: bool | None
 
+    # Generation strategy metadata
+    generation_strategy: str
+    strategic_plan: str  # NL plan from strategist (planner_actor)
+    routed_phase: str  # Phase chosen by router (router_specialists)
+
     # Game-level (accumulated)
     game_id: str
     condition: str
@@ -84,6 +89,9 @@ def create_initial_turn_state(
         "prompt_token_count": 0,
         "critic_verdict": None,
         "ground_truth_verdict": None,
+        "generation_strategy": "generator_only",
+        "strategic_plan": "",
+        "routed_phase": "",
         "game_id": game_id,
         "condition": condition,
         "turn_results": [],

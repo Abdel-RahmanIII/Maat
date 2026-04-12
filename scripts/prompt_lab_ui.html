@@ -1,0 +1,1705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Maat Prompt Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-base: #0d1117;
+      --bg-surface: #161b22;
+      --bg-card: #1c2333;
+      --bg-elevated: #222d3d;
+      --bg-input: #0d1117;
+      --border: #30363d;
+      --border-focus: #58a6ff;
+      --text-primary: #e6edf3;
+      --text-secondary: #8b949e;
+      --text-muted: #6e7681;
+      --accent: #58a6ff;
+      --accent-hover: #79c0ff;
+      --green: #3fb950;
+      --green-dim: #1a4731;
+      --red: #f85149;
+      --red-dim: #4a1c1c;
+      --yellow: #d29922;
+      --yellow-dim: #3d2e00;
+      --purple: #bc8cff;
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Consolas', monospace;
+      --radius: 8px;
+      --radius-sm: 6px;
+      --shadow: 0 4px 24px rgba(0,0,0,0.4);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg-base);
+      color: var(--text-primary);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Header ────────────────────────────────────────────────── */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 24px;
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .header-left { display: flex; align-items: center; gap: 16px; }
+    .brand {
+      font-weight: 700;
+      font-size: 18px;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, var(--accent), var(--purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .brand-sub {
+      font-size: 13px;
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+    .header-right { display: flex; align-items: center; gap: 12px; }
+
+    /* ── Select styling ───────────────────────────────────────── */
+    select, input[type="text"], textarea {
+      font-family: var(--font-sans);
+      font-size: 13px;
+      background: var(--bg-input);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 8px 12px;
+      outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      width: 100%;
+    }
+    select:focus, input[type="text"]:focus, textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(88,166,255,0.15);
+    }
+    select { cursor: pointer; }
+    textarea {
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      line-height: 1.6;
+      resize: vertical;
+      min-height: 60px;
+    }
+
+    /* ── Buttons ───────────────────────────────────────────────── */
+    .btn {
+      font-family: var(--font-sans);
+      font-size: 13px;
+      font-weight: 600;
+      padding: 8px 18px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: all 0.15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-secondary {
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+    }
+    .btn-secondary:hover { background: var(--border); }
+    .btn-ghost {
+      background: transparent;
+      color: var(--text-secondary);
+      border-color: transparent;
+    }
+    .btn-ghost:hover { color: var(--text-primary); background: var(--bg-elevated); }
+    .btn-danger {
+      background: transparent;
+      color: var(--red);
+      border-color: var(--red);
+    }
+    .btn-danger:hover { background: var(--red-dim); }
+    .btn-sm { padding: 5px 12px; font-size: 12px; }
+
+    /* ── Layout ────────────────────────────────────────────────── */
+    .main-layout {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      min-height: calc(100vh - 53px);
+    }
+
+    /* ── Sidebar ──────────────────────────────────────────────── */
+    .sidebar {
+      background: var(--bg-surface);
+      border-right: 1px solid var(--border);
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .sidebar-section { display: flex; flex-direction: column; gap: 8px; }
+    .sidebar-section-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-muted);
+    }
+    .role-description {
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      padding: 8px 10px;
+      background: var(--bg-card);
+      border-radius: var(--radius-sm);
+      border-left: 3px solid var(--accent);
+    }
+
+    .field-group { display: flex; flex-direction: column; gap: 4px; }
+    .field-label {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+
+    .presets-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+    .preset-btn {
+      font-size: 11px;
+      padding: 6px 8px;
+      text-align: left;
+    }
+    .preset-btn.active { border-color: var(--accent); color: var(--accent); }
+
+    .board-wrap {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px;
+    }
+    .board-grid {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      display: grid;
+      grid-template-columns: repeat(8, minmax(0, 1fr));
+      grid-template-rows: repeat(8, minmax(0, 1fr));
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .board-square {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      min-width: 0;
+      min-height: 0;
+      border: none;
+      appearance: none;
+      -webkit-appearance: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      padding: 0;
+      cursor: pointer;
+      user-select: none;
+      font-size: clamp(20px, 2.1vw, 28px);
+      line-height: 1;
+      color: #111;
+      transition: filter 0.12s ease;
+    }
+    .board-square.light { background: #f1d9b5; }
+    .board-square.dark { background: #b58863; }
+    .board-square:hover { filter: brightness(1.08); }
+    .board-square.selected {
+      box-shadow: inset 0 0 0 3px rgba(88, 166, 255, 0.95);
+    }
+    .board-square.last-from {
+      box-shadow: inset 0 0 0 3px rgba(210, 153, 34, 0.95);
+    }
+    .board-square.last-to {
+      box-shadow: inset 0 0 0 3px rgba(63, 185, 80, 0.95);
+    }
+    .square-file-label,
+    .square-rank-label {
+      position: absolute;
+      font-size: 10px;
+      font-weight: 700;
+      opacity: 0.75;
+      pointer-events: none;
+      color: rgba(13, 17, 23, 0.72);
+    }
+    .square-file-label { right: 3px; bottom: 2px; }
+    .square-rank-label { left: 3px; top: 2px; }
+    .board-controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+    .board-status {
+      font-size: 11px;
+      color: var(--text-secondary);
+      min-height: 16px;
+      line-height: 1.4;
+    }
+    .move-rating-panel {
+      margin-top: 8px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .move-rating-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .move-rating-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+    .move-rating-state {
+      font-size: 10px;
+      border-radius: 999px;
+      padding: 2px 8px;
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      background: var(--bg-base);
+    }
+    .move-rating-state.loading {
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+    .move-rating-state.error {
+      color: var(--red);
+      border-color: var(--red);
+    }
+    .move-rating-state.ready {
+      color: var(--green);
+      border-color: var(--green);
+    }
+    .move-rating-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .move-rating-item {
+      background: var(--bg-base);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 6px 8px;
+      min-height: 48px;
+    }
+    .move-rating-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+    .move-rating-value {
+      font-size: 13px;
+      font-family: var(--font-mono);
+      color: var(--text-primary);
+      word-break: break-word;
+    }
+    .move-rating-value.quality-best,
+    .move-rating-value.quality-good {
+      color: var(--green);
+      font-weight: 700;
+    }
+    .move-rating-value.quality-inaccuracy {
+      color: var(--yellow);
+      font-weight: 700;
+    }
+    .move-rating-value.quality-mistake,
+    .move-rating-value.quality-blunder {
+      color: var(--red);
+      font-weight: 700;
+    }
+    .move-rating-hint {
+      font-size: 11px;
+      color: var(--text-secondary);
+      line-height: 1.4;
+      min-height: 16px;
+    }
+
+    .sidebar-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: auto;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+    }
+
+    /* ── Content Area ────────────────────────────────────────── */
+    .content {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Tabs ──────────────────────────────────────────────────── */
+    .tabs {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 16px;
+    }
+    .tab {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      padding: 12px 16px;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.15s;
+      user-select: none;
+    }
+    .tab:hover { color: var(--text-primary); }
+    .tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+    .tab-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 600;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      border-radius: 9px;
+      margin-left: 6px;
+    }
+    .tab-badge.green { background: var(--green-dim); color: var(--green); }
+    .tab-badge.red { background: var(--red-dim); color: var(--red); }
+    .tab-badge.yellow { background: var(--yellow-dim); color: var(--yellow); }
+
+    /* ── Tab panels ───────────────────────────────────────────── */
+    .tab-panel {
+      flex: 1;
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .tab-panel.active { display: flex; }
+
+    .panel-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+    }
+
+    /* ── Code blocks ──────────────────────────────────────────── */
+    .code-block {
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      line-height: 1.7;
+      background: var(--bg-base);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow-y: auto;
+      color: var(--text-primary);
+    }
+    .code-block.editable {
+      outline: none;
+      cursor: text;
+      min-height: 200px;
+    }
+
+    .code-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .code-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-muted);
+    }
+
+    /* ── Template editor ──────────────────────────────────────── */
+    .template-editor {
+      width: 100%;
+      min-height: 300px;
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      line-height: 1.7;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      resize: vertical;
+    }
+
+    /* ── Message blocks ───────────────────────────────────────── */
+    .message-block {
+      margin-bottom: 16px;
+    }
+    .message-role {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .message-role.system { color: var(--purple); }
+    .message-role.human { color: var(--accent); }
+    .message-role.ai { color: var(--green); }
+
+    /* ── Output section ───────────────────────────────────────── */
+    .output-section { display: flex; flex-direction: column; gap: 16px; }
+
+    .validation-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 20px;
+    }
+    .validation-badge.valid { background: var(--green-dim); color: var(--green); }
+    .validation-badge.invalid { background: var(--red-dim); color: var(--red); }
+    .validation-badge.no-output { background: var(--yellow-dim); color: var(--yellow); }
+
+    .stats-row {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .stat {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      min-width: 120px;
+    }
+    .stat-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+    .stat-value {
+      font-size: 18px;
+      font-weight: 700;
+      font-family: var(--font-mono);
+    }
+    .stat-value.green { color: var(--green); }
+    .stat-value.red { color: var(--red); }
+    .stat-value.blue { color: var(--accent); }
+
+    /* ── Loading overlay ──────────────────────────────────────── */
+    .loading-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(13,17,23,0.8);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+      backdrop-filter: blur(4px);
+    }
+    .loading-overlay.active { display: flex; }
+    .loading-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px 48px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      box-shadow: var(--shadow);
+    }
+    .spinner {
+      width: 32px; height: 32px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text {
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+
+    /* ── Toast ─────────────────────────────────────────────────── */
+    .toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 300;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .toast {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 20px;
+      font-size: 13px;
+      box-shadow: var(--shadow);
+      animation: slideIn 0.25s ease-out;
+      max-width: 360px;
+    }
+    .toast.success { border-left: 3px solid var(--green); }
+    .toast.error { border-left: 3px solid var(--red); }
+    .toast.info { border-left: 3px solid var(--accent); }
+    @keyframes slideIn {
+      from { transform: translateX(100px); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+
+    /* ── Empty state ──────────────────────────────────────────── */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 20px;
+      color: var(--text-muted);
+      text-align: center;
+      gap: 12px;
+    }
+    .empty-state-icon { font-size: 48px; opacity: 0.3; }
+    .empty-state-text { font-size: 14px; }
+    .empty-state-sub { font-size: 12px; }
+
+    /* ── Diff indicator ───────────────────────────────────────── */
+    .modified-indicator {
+      display: none;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--yellow);
+    }
+    .modified-indicator.visible { display: block; }
+
+    /* ── Scrollbar ─────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+    /* ── Responsive ────────────────────────────────────────────── */
+    @media (max-width: 900px) {
+      .main-layout { grid-template-columns: 1fr; }
+      .sidebar { max-height: 50vh; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ────────────────────────────────────────────────────── -->
+<header class="header">
+  <div class="header-left">
+    <span class="brand">Maat Prompt Lab</span>
+    <span class="brand-sub">Interactive prompt testing</span>
+  </div>
+  <div class="header-right">
+    <select id="roleSelect" style="width: 220px;">
+      <option value="">Loading roles...</option>
+    </select>
+  </div>
+</header>
+
+<!-- ── Main Layout ───────────────────────────────────────────────── -->
+<div class="main-layout">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Role</div>
+      <div id="roleDescription" class="role-description">Select a role to begin.</div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Position Presets</div>
+      <div id="presetsGrid" class="presets-grid"></div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Interactive Board</div>
+      <div class="board-wrap">
+        <div id="boardGrid" class="board-grid" aria-label="Interactive chess board"></div>
+      </div>
+      <div class="board-controls">
+        <button class="btn btn-ghost btn-sm" onclick="syncBoardFromFields()">Load Fields</button>
+        <button class="btn btn-ghost btn-sm" onclick="setBoardToStart()">Start Pos</button>
+        <button class="btn btn-ghost btn-sm" onclick="flipBoardOrientation()">Flip Board</button>
+        <button class="btn btn-ghost btn-sm" onclick="clearBoardSelection()">Clear Select</button>
+      </div>
+      <div id="boardStatus" class="board-status">Board ready.</div>
+      <div class="move-rating-panel" id="moveRatingPanel">
+        <div class="move-rating-header">
+          <div class="move-rating-title">Move Rating</div>
+          <div class="move-rating-state" id="moveRatingState">IDLE</div>
+        </div>
+        <div class="move-rating-grid">
+          <div class="move-rating-item">
+            <div class="move-rating-label">Move</div>
+            <div class="move-rating-value" id="moveRatingMove">-</div>
+          </div>
+          <div class="move-rating-item">
+            <div class="move-rating-label">Score After</div>
+            <div class="move-rating-value" id="moveRatingScore">-</div>
+          </div>
+          <div class="move-rating-item">
+            <div class="move-rating-label">Quality</div>
+            <div class="move-rating-value" id="moveRatingQuality">-</div>
+          </div>
+          <div class="move-rating-item">
+            <div class="move-rating-label">Best Move</div>
+            <div class="move-rating-value" id="moveRatingBest">-</div>
+          </div>
+        </div>
+        <div class="move-rating-hint" id="moveRatingHint">Play a legal move to get engine feedback.</div>
+      </div>
+    </div>
+
+    <div class="sidebar-section" id="fieldsContainer">
+      <div class="sidebar-section-title">Parameters</div>
+      <!-- Dynamic fields injected here -->
+    </div>
+
+    <div class="sidebar-actions">
+      <button class="btn btn-secondary" onclick="doPreview()" id="btnPreview">
+        <span>&#x1F50D;</span> Preview Prompt
+      </button>
+      <button class="btn btn-primary" onclick="doInvoke()" id="btnInvoke">
+        <span>&#x25B6;</span> Run LLM
+      </button>
+    </div>
+  </aside>
+
+  <!-- Content -->
+  <main class="content">
+    <div class="tabs">
+      <div class="tab active" data-tab="template" onclick="switchTab('template')">
+        Template
+        <span class="modified-indicator" id="templateModified"></span>
+      </div>
+      <div class="tab" data-tab="rendered" onclick="switchTab('rendered')">Rendered Prompt</div>
+      <div class="tab" data-tab="output" onclick="switchTab('output')">
+        Output
+        <span class="tab-badge" id="outputBadge" style="display:none;"></span>
+      </div>
+    </div>
+
+    <!-- Template Tab -->
+    <div class="tab-panel active" data-panel="template">
+      <div class="panel-content">
+        <div class="code-header">
+          <span class="code-label" id="templateFileLabel">Prompt Template</span>
+          <div style="display:flex; gap:8px;">
+            <button class="btn btn-ghost btn-sm" onclick="resetTemplate()">Reset</button>
+            <button class="btn btn-secondary btn-sm" onclick="saveTemplate()">Save to Disk</button>
+          </div>
+        </div>
+        <textarea class="template-editor" id="templateEditor" spellcheck="false"
+                  placeholder="Select a role to load its prompt template..."></textarea>
+      </div>
+    </div>
+
+    <!-- Rendered Tab -->
+    <div class="tab-panel" data-panel="rendered">
+      <div class="panel-content">
+        <div id="renderedContent">
+          <div class="empty-state">
+            <div class="empty-state-icon">&#x1F4DD;</div>
+            <div class="empty-state-text">Click "Preview Prompt" to see the rendered messages</div>
+            <div class="empty-state-sub">The rendered prompt shows exactly what gets sent to the LLM</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Output Tab -->
+    <div class="tab-panel" data-panel="output">
+      <div class="panel-content">
+        <div id="outputContent">
+          <div class="empty-state">
+            <div class="empty-state-icon">&#x1F916;</div>
+            <div class="empty-state-text">Click "Run LLM" to invoke the model</div>
+            <div class="empty-state-sub">The output panel shows the raw LLM response, validation results, and token usage</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ── Loading Overlay ───────────────────────────────────────────── -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-card">
+    <div class="spinner"></div>
+    <div class="loading-text" id="loadingText">Invoking LLM...</div>
+  </div>
+</div>
+
+<!-- ── Toast Container ───────────────────────────────────────────── -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+<script>
+// ── State ──────────────────────────────────────────────────────────
+let roles = {};
+let presets = [];
+let currentRole = null;
+let originalTemplate = '';
+let boardState = {
+  game: null,
+  orientation: 'white',
+  selectedSquare: null,
+  lastMove: null,
+  ratingRequestId: 0,
+};
+
+const MOVE_RATING_TIMEOUT_MS = 12000;
+
+const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+const PIECE_GLYPHS = {
+  wp: '\u2659',
+  wn: '\u2658',
+  wb: '\u2657',
+  wr: '\u2656',
+  wq: '\u2655',
+  wk: '\u2654',
+  bp: '\u265F',
+  bn: '\u265E',
+  bb: '\u265D',
+  br: '\u265C',
+  bq: '\u265B',
+  bk: '\u265A',
+};
+
+// ── Init ───────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async () => {
+  const [rolesRes, presetsRes] = await Promise.all([
+    fetch('/api/roles').then(r => r.json()),
+    fetch('/api/presets').then(r => r.json()),
+  ]);
+  roles = rolesRes;
+  presets = presetsRes;
+
+  // Populate role dropdown
+  const sel = document.getElementById('roleSelect');
+  sel.innerHTML = '';
+  const groups = {
+    'Generation': ['generator', 'opening_specialist', 'middlegame_specialist', 'endgame_specialist'],
+    'Planning': ['strategist', 'tactician'],
+    'Validation': ['critic', 'explainer'],
+    'Routing': ['router'],
+    'Autonomous': ['react'],
+  };
+  for (const [group, ids] of Object.entries(groups)) {
+    const optgroup = document.createElement('optgroup');
+    optgroup.label = group;
+    for (const id of ids) {
+      if (!roles[id]) continue;
+      const opt = document.createElement('option');
+      opt.value = id;
+      opt.textContent = roles[id].name;
+      optgroup.appendChild(opt);
+    }
+    sel.appendChild(optgroup);
+  }
+
+  // Populate presets
+  const grid = document.getElementById('presetsGrid');
+  for (const p of presets) {
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-ghost btn-sm preset-btn';
+    btn.textContent = p.name;
+    btn.dataset.presetId = p.id;
+    btn.onclick = () => applyPreset(p);
+    grid.appendChild(btn);
+  }
+
+  // Event listeners
+  sel.addEventListener('change', () => loadRole(sel.value));
+
+  // Template change tracking
+  document.getElementById('templateEditor').addEventListener('input', () => {
+    const indicator = document.getElementById('templateModified');
+    const current = document.getElementById('templateEditor').value;
+    indicator.classList.toggle('visible', current !== originalTemplate);
+  });
+
+  initBoard();
+
+  // Load first role
+  if (sel.options.length > 0) {
+    sel.value = sel.options[0].value;
+    loadRole(sel.value);
+  }
+});
+
+// ── Role Loading ──────────────────────────────────────────────────
+async function loadRole(roleId) {
+  if (!roleId || !roles[roleId]) return;
+  currentRole = roleId;
+  const role = roles[roleId];
+
+  // Update description
+  document.getElementById('roleDescription').textContent = role.description;
+
+  // Load template
+  const res = await fetch(`/api/prompt/${roleId}`);
+  const data = await res.json();
+  const editor = document.getElementById('templateEditor');
+  editor.value = data.template;
+  originalTemplate = data.template;
+  document.getElementById('templateModified').classList.remove('visible');
+
+  const fileLabel = document.getElementById('templateFileLabel');
+  fileLabel.textContent = data.prompt_file ? `Template: ${data.prompt_file}` : 'Template (inline)';
+
+  // Build parameter fields
+  buildFields(role.fields);
+  attachFieldSyncListeners();
+  syncBoardFromFields();
+
+  // Clear output and rendered
+  document.getElementById('renderedContent').innerHTML = `
+    <div class="empty-state">
+      <div class="empty-state-icon">&#x1F4DD;</div>
+      <div class="empty-state-text">Click "Preview Prompt" to see the rendered messages</div>
+    </div>`;
+  document.getElementById('outputContent').innerHTML = `
+    <div class="empty-state">
+      <div class="empty-state-icon">&#x1F916;</div>
+      <div class="empty-state-text">Click "Run LLM" to invoke the model</div>
+    </div>`;
+  document.getElementById('outputBadge').style.display = 'none';
+}
+
+// ── Dynamic Fields ────────────────────────────────────────────────
+function buildFields(fields) {
+  const container = document.getElementById('fieldsContainer');
+  // Keep the header
+  container.innerHTML = '<div class="sidebar-section-title">Parameters</div>';
+
+  for (const f of fields) {
+    const group = document.createElement('div');
+    group.className = 'field-group';
+
+    const label = document.createElement('label');
+    label.className = 'field-label';
+    label.textContent = f.label;
+    label.setAttribute('for', `field-${f.id}`);
+    group.appendChild(label);
+
+    let input;
+    if (f.type === 'select') {
+      input = document.createElement('select');
+      for (const opt of f.options) {
+        const option = document.createElement('option');
+        option.value = opt;
+        option.textContent = opt;
+        if (opt === f.default) option.selected = true;
+        input.appendChild(option);
+      }
+    } else if (f.type === 'textarea') {
+      input = document.createElement('textarea');
+      input.rows = 3;
+      input.value = f.default || '';
+    } else {
+      input = document.createElement('input');
+      input.type = 'text';
+      input.value = f.default || '';
+    }
+    input.id = `field-${f.id}`;
+    input.dataset.fieldId = f.id;
+    group.appendChild(input);
+    container.appendChild(group);
+  }
+}
+
+function attachFieldSyncListeners() {
+  ['fen', 'move_history', 'input_mode'].forEach((fieldId) => {
+    const field = document.getElementById(`field-${fieldId}`);
+    if (!field) return;
+    field.addEventListener('change', syncBoardFromFields);
+    if (fieldId !== 'input_mode') {
+      field.addEventListener('blur', syncBoardFromFields);
+    }
+  });
+}
+
+// ── Collect Parameters ────────────────────────────────────────────
+function collectParams() {
+  const params = {};
+  const fields = document.querySelectorAll('[data-field-id]');
+  for (const f of fields) {
+    params[f.dataset.fieldId] = f.value;
+  }
+  return params;
+}
+
+// ── Preset Application ───────────────────────────────────────────
+function applyPreset(preset) {
+  // Update active state
+  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+  const activeBtn = document.querySelector(`[data-preset-id="${preset.id}"]`);
+  if (activeBtn) activeBtn.classList.add('active');
+
+  // Set FEN and history
+  const fenField = document.getElementById('field-fen');
+  const histField = document.getElementById('field-move_history');
+  if (fenField) fenField.value = preset.fen;
+  if (histField) histField.value = preset.history;
+
+  syncBoardFromFields();
+
+  toast(`Applied preset: ${preset.name}`, 'info');
+}
+
+// ── Board Helpers ────────────────────────────────────────────────
+function initBoard() {
+  if (typeof Chess !== 'function') {
+    updateBoardStatus('Unable to load browser chess engine.');
+    clearMoveRatingPanel('Move rating unavailable: chess board failed to initialize.');
+    return;
+  }
+
+  boardState.game = new Chess();
+  boardState.selectedSquare = null;
+  boardState.lastMove = null;
+  renderBoard();
+  clearMoveRatingPanel('Play a legal move to get engine feedback.');
+  updateBoardStatus('Board loaded. Click a piece, then click a destination.');
+}
+
+function updateBoardStatus(message) {
+  const status = document.getElementById('boardStatus');
+  if (status) status.textContent = message;
+}
+
+function clearMoveRatingPanel(message) {
+  boardState.ratingRequestId += 1;
+
+  const stateEl = document.getElementById('moveRatingState');
+  const moveEl = document.getElementById('moveRatingMove');
+  const scoreEl = document.getElementById('moveRatingScore');
+  const qualityEl = document.getElementById('moveRatingQuality');
+  const bestEl = document.getElementById('moveRatingBest');
+  const hintEl = document.getElementById('moveRatingHint');
+
+  if (!stateEl || !moveEl || !scoreEl || !qualityEl || !bestEl || !hintEl) {
+    return;
+  }
+
+  stateEl.textContent = 'IDLE';
+  stateEl.className = 'move-rating-state';
+  moveEl.textContent = '-';
+  scoreEl.textContent = '-';
+  qualityEl.textContent = '-';
+  qualityEl.className = 'move-rating-value';
+  bestEl.textContent = '-';
+  hintEl.textContent = message || 'Play a legal move to get engine feedback.';
+}
+
+function qualityClassName(quality) {
+  const normalized = String(quality || '').toLowerCase();
+  if (!normalized) return '';
+  return `quality-${normalized}`;
+}
+
+function formatLossCp(scoreLossCp) {
+  const value = Number(scoreLossCp);
+  if (!Number.isFinite(value)) return 'n/a';
+  if (value === 0) return '0.00';
+  const sign = value > 0 ? '-' : '+';
+  return `${sign}${Math.abs(value / 100).toFixed(2)}`;
+}
+
+function renderMoveRatingLoading(moveUci) {
+  const stateEl = document.getElementById('moveRatingState');
+  const moveEl = document.getElementById('moveRatingMove');
+  const hintEl = document.getElementById('moveRatingHint');
+  if (!stateEl || !moveEl || !hintEl) return;
+
+  stateEl.textContent = 'ANALYZING';
+  stateEl.className = 'move-rating-state loading';
+  moveEl.textContent = moveUci || '-';
+  hintEl.textContent = 'Analyzing move with Stockfish...';
+}
+
+function renderMoveRatingResult(result) {
+  const stateEl = document.getElementById('moveRatingState');
+  const moveEl = document.getElementById('moveRatingMove');
+  const scoreEl = document.getElementById('moveRatingScore');
+  const qualityEl = document.getElementById('moveRatingQuality');
+  const bestEl = document.getElementById('moveRatingBest');
+  const hintEl = document.getElementById('moveRatingHint');
+  if (!stateEl || !moveEl || !scoreEl || !qualityEl || !bestEl || !hintEl) return;
+
+  stateEl.textContent = 'READY';
+  stateEl.className = 'move-rating-state ready';
+  moveEl.textContent = result.move_uci || '-';
+  scoreEl.textContent = result.score_after?.display || '-';
+  qualityEl.textContent = result.quality || '-';
+  qualityEl.className = `move-rating-value ${qualityClassName(result.quality)}`.trim();
+  bestEl.textContent = result.best_move || '-';
+
+  if (result.is_best_move) {
+    hintEl.textContent = 'Excellent: this matches the engine best move.';
+    return;
+  }
+
+  const lossText = formatLossCp(result.score_loss_cp);
+  hintEl.textContent = `Eval change: ${lossText}. Best move was ${result.best_move || 'n/a'}.`;
+}
+
+function renderMoveRatingError(message) {
+  const stateEl = document.getElementById('moveRatingState');
+  const hintEl = document.getElementById('moveRatingHint');
+  if (!stateEl || !hintEl) return;
+
+  stateEl.textContent = 'ERROR';
+  stateEl.className = 'move-rating-state error';
+  hintEl.textContent = message || 'Move rating is unavailable for this move.';
+}
+
+async function requestMoveRating(fenBeforeMove, moveUci, source) {
+  if (!fenBeforeMove || !moveUci) {
+    return;
+  }
+
+  const requestId = boardState.ratingRequestId + 1;
+  boardState.ratingRequestId = requestId;
+  renderMoveRatingLoading(moveUci);
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), MOVE_RATING_TIMEOUT_MS);
+
+  try {
+    const res = await fetch('/api/rate-move', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fen: fenBeforeMove,
+        move_uci: moveUci,
+        source,
+      }),
+      signal: controller.signal,
+    });
+
+    const data = await res.json();
+    if (requestId !== boardState.ratingRequestId) {
+      return;
+    }
+
+    if (!res.ok || data.error) {
+      renderMoveRatingError(data.error || `Move rating failed (${res.status}).`);
+      return;
+    }
+
+    renderMoveRatingResult(data);
+  } catch (e) {
+    if (requestId !== boardState.ratingRequestId) {
+      return;
+    }
+
+    const message = e && e.name === 'AbortError'
+      ? 'Move rating request timed out.'
+      : `Move rating failed: ${e.message}`;
+    renderMoveRatingError(message);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+function getBoardFiles() {
+  return boardState.orientation === 'white' ? [...FILES] : [...FILES].reverse();
+}
+
+function getBoardRanks() {
+  return boardState.orientation === 'white'
+    ? [8, 7, 6, 5, 4, 3, 2, 1]
+    : [1, 2, 3, 4, 5, 6, 7, 8];
+}
+
+function isLightSquare(square) {
+  const file = square.charCodeAt(0) - 97;
+  const rank = parseInt(square[1], 10);
+  return (file + rank) % 2 === 0;
+}
+
+function describePiece(piece) {
+  if (!piece) return 'empty';
+  const color = piece.color === 'w' ? 'white' : 'black';
+  const names = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' };
+  return `${color} ${names[piece.type] || piece.type}`;
+}
+
+function renderBoard() {
+  const grid = document.getElementById('boardGrid');
+  if (!grid || !boardState.game) return;
+
+  grid.innerHTML = '';
+  const files = getBoardFiles();
+  const ranks = getBoardRanks();
+
+  for (let rankIdx = 0; rankIdx < ranks.length; rankIdx++) {
+    for (let fileIdx = 0; fileIdx < files.length; fileIdx++) {
+      const square = `${files[fileIdx]}${ranks[rankIdx]}`;
+      const piece = boardState.game.get(square);
+
+      const squareEl = document.createElement('button');
+      squareEl.type = 'button';
+      squareEl.className = `board-square ${isLightSquare(square) ? 'light' : 'dark'}`;
+      squareEl.dataset.square = square;
+      squareEl.title = `${square}: ${describePiece(piece)}`;
+
+      if (boardState.selectedSquare === square) {
+        squareEl.classList.add('selected');
+      }
+      if (boardState.lastMove && boardState.lastMove.from === square) {
+        squareEl.classList.add('last-from');
+      }
+      if (boardState.lastMove && boardState.lastMove.to === square) {
+        squareEl.classList.add('last-to');
+      }
+
+      const key = piece ? `${piece.color}${piece.type}` : null;
+      squareEl.textContent = key ? PIECE_GLYPHS[key] || '' : '';
+      squareEl.onclick = () => onBoardSquareClick(square);
+
+      if (rankIdx === ranks.length - 1) {
+        const fileLabel = document.createElement('span');
+        fileLabel.className = 'square-file-label';
+        fileLabel.textContent = files[fileIdx];
+        squareEl.appendChild(fileLabel);
+      }
+
+      if (fileIdx === 0) {
+        const rankLabel = document.createElement('span');
+        rankLabel.className = 'square-rank-label';
+        rankLabel.textContent = String(ranks[rankIdx]);
+        squareEl.appendChild(rankLabel);
+      }
+
+      grid.appendChild(squareEl);
+    }
+  }
+}
+
+function clearBoardSelection() {
+  boardState.selectedSquare = null;
+  renderBoard();
+  updateBoardStatus('Selection cleared.');
+}
+
+function flipBoardOrientation() {
+  boardState.orientation = boardState.orientation === 'white' ? 'black' : 'white';
+  renderBoard();
+  updateBoardStatus(`Board flipped. ${boardState.orientation} is now at the bottom.`);
+}
+
+function setBoardToStart() {
+  if (typeof Chess !== 'function') return;
+  boardState.game = new Chess();
+  boardState.selectedSquare = null;
+  boardState.lastMove = null;
+  renderBoard();
+
+  const fenField = document.getElementById('field-fen');
+  const histField = document.getElementById('field-move_history');
+  if (fenField) fenField.value = boardState.game.fen();
+  if (histField) histField.value = '';
+
+  clearMoveRatingPanel('Board reset. Play a legal move to get engine feedback.');
+  updateBoardStatus('Board reset to the starting position.');
+}
+
+function uciToMoveObject(uciMove) {
+  const text = (uciMove || '').trim().toLowerCase();
+  if (!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(text)) {
+    return null;
+  }
+
+  const move = {
+    from: text.slice(0, 2),
+    to: text.slice(2, 4),
+  };
+  if (text.length === 5) {
+    move.promotion = text[4];
+  }
+  return move;
+}
+
+function gameFromHistory(historyMoves) {
+  if (typeof Chess !== 'function') return null;
+  const game = new Chess();
+
+  for (const uciMove of historyMoves) {
+    const move = uciToMoveObject(uciMove);
+    if (!move) return null;
+    const ok = game.move(move);
+    if (!ok) return null;
+  }
+
+  return game;
+}
+
+function syncBoardFromFields() {
+  if (typeof Chess !== 'function') return;
+
+  const fenField = document.getElementById('field-fen');
+  const histField = document.getElementById('field-move_history');
+  const inputModeField = document.getElementById('field-input_mode');
+
+  if (!fenField && !histField) {
+    updateBoardStatus('This role does not expose board fields.');
+    return;
+  }
+
+  const inputMode = inputModeField ? inputModeField.value : 'fen';
+  const fenText = fenField ? fenField.value.trim() : '';
+  const historyText = histField ? histField.value.trim() : '';
+  const historyMoves = historyText ? historyText.split(/\s+/).filter(Boolean) : [];
+
+  let nextGame = null;
+  let loadedFrom = '';
+
+  if (inputMode === 'history' && historyMoves.length > 0) {
+    nextGame = gameFromHistory(historyMoves);
+    if (nextGame) loadedFrom = 'history';
+  }
+
+  if (!nextGame && fenText) {
+    const fenGame = new Chess();
+    if (fenGame.load(fenText)) {
+      nextGame = fenGame;
+      loadedFrom = 'fen';
+    }
+  }
+
+  if (!nextGame && historyMoves.length > 0) {
+    nextGame = gameFromHistory(historyMoves);
+    if (nextGame) loadedFrom = 'history';
+  }
+
+  if (!nextGame) {
+    nextGame = new Chess();
+    loadedFrom = 'start';
+  }
+
+  boardState.game = nextGame;
+  boardState.selectedSquare = null;
+  boardState.lastMove = null;
+  renderBoard();
+  clearMoveRatingPanel('Position loaded. Play a legal move to get engine feedback.');
+
+  if (fenField) {
+    fenField.value = boardState.game.fen();
+  }
+
+  if (loadedFrom === 'history') {
+    updateBoardStatus('Board loaded from move history.');
+  } else if (loadedFrom === 'fen') {
+    updateBoardStatus('Board loaded from FEN.');
+  } else {
+    updateBoardStatus('Could not parse position, using starting board.');
+  }
+}
+
+function syncFieldsFromBoardMove(uciMove) {
+  const fenField = document.getElementById('field-fen');
+  const histField = document.getElementById('field-move_history');
+
+  if (fenField && boardState.game) {
+    fenField.value = boardState.game.fen();
+  }
+
+  if (histField) {
+    const current = histField.value.trim();
+    histField.value = current ? `${current} ${uciMove}` : uciMove;
+  }
+}
+
+function onBoardSquareClick(square) {
+  if (!boardState.game) return;
+
+  const selected = boardState.selectedSquare;
+  const clickedPiece = boardState.game.get(square);
+
+  if (!selected) {
+    if (!clickedPiece) {
+      updateBoardStatus('Select a piece first.');
+      return;
+    }
+
+    const turn = boardState.game.turn();
+    if (clickedPiece.color !== turn) {
+      updateBoardStatus(`It is ${turn === 'w' ? 'white' : 'black'} to move.`);
+      return;
+    }
+
+    boardState.selectedSquare = square;
+    renderBoard();
+    updateBoardStatus(`Selected ${square}. Choose destination square.`);
+    return;
+  }
+
+  if (selected === square) {
+    clearBoardSelection();
+    return;
+  }
+
+  const fenBeforeMove = boardState.game.fen();
+  const move = boardState.game.move({
+    from: selected,
+    to: square,
+    promotion: 'q',
+  });
+
+  if (!move) {
+    if (clickedPiece && clickedPiece.color === boardState.game.turn()) {
+      boardState.selectedSquare = square;
+      renderBoard();
+      updateBoardStatus(`Selected ${square}. Choose destination square.`);
+      return;
+    }
+
+    updateBoardStatus(`Illegal move: ${selected} to ${square}.`);
+    return;
+  }
+
+  const uciMove = move.from + move.to + (move.promotion || '');
+  boardState.lastMove = { from: move.from, to: move.to };
+  boardState.selectedSquare = null;
+  syncFieldsFromBoardMove(uciMove);
+  renderBoard();
+  updateBoardStatus(`Played ${uciMove}.`);
+  requestMoveRating(fenBeforeMove, uciMove, 'manual');
+}
+
+function applyModelMoveToBoard(validation) {
+  if (!validation || !validation.valid || !validation.move || !boardState.game) {
+    return;
+  }
+
+  const parsed = uciToMoveObject(validation.move);
+  if (!parsed) {
+    return;
+  }
+
+  let fenBeforeMove = boardState.game.fen();
+  let move = boardState.game.move(parsed);
+  if (!move) {
+    syncBoardFromFields();
+    if (!boardState.game) return;
+    fenBeforeMove = boardState.game.fen();
+    move = boardState.game.move(parsed);
+  }
+
+  if (!move) {
+    updateBoardStatus(`Model move ${validation.move} is legal for submitted FEN, but not legal on current board.`);
+    return;
+  }
+
+  const uciMove = move.from + move.to + (move.promotion || '');
+  boardState.lastMove = { from: move.from, to: move.to };
+  boardState.selectedSquare = null;
+  syncFieldsFromBoardMove(uciMove);
+  renderBoard();
+  updateBoardStatus(`Model move applied: ${validation.move}.`);
+  requestMoveRating(fenBeforeMove, uciMove, 'model');
+}
+
+// ── Tab Switching ─────────────────────────────────────────────────
+function switchTab(tabId) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelector(`.tab[data-tab="${tabId}"]`).classList.add('active');
+  document.querySelector(`.tab-panel[data-panel="${tabId}"]`).classList.add('active');
+}
+
+// ── Preview ───────────────────────────────────────────────────────
+async function doPreview() {
+  if (!currentRole) return toast('Select a role first', 'error');
+
+  const editor = document.getElementById('templateEditor');
+  const templateOverride = editor.value !== originalTemplate ? editor.value : null;
+
+  try {
+    const res = await fetch('/api/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        role_id: currentRole,
+        params: collectParams(),
+        template_override: templateOverride,
+      }),
+    });
+    const data = await res.json();
+    if (data.error) { toast(data.error, 'error'); return; }
+    renderPreview(data);
+    switchTab('rendered');
+  } catch (e) {
+    toast(`Preview failed: ${e.message}`, 'error');
+  }
+}
+
+function renderPreview(data) {
+  const container = document.getElementById('renderedContent');
+  container.innerHTML = `
+    <div class="message-block">
+      <div class="message-role system">System Message</div>
+      <div class="code-block">${escapeHtml(data.system_message)}</div>
+    </div>
+    <div class="message-block">
+      <div class="message-role human">Human Message</div>
+      <div class="code-block">${escapeHtml(data.human_message)}</div>
+    </div>
+  `;
+}
+
+// ── Invoke ────────────────────────────────────────────────────────
+async function doInvoke() {
+  if (!currentRole) return toast('Select a role first', 'error');
+
+  const editor = document.getElementById('templateEditor');
+  const templateOverride = editor.value !== originalTemplate ? editor.value : null;
+
+  showLoading(roles[currentRole].is_react
+    ? 'Running ReAct loop (may take a minute)...'
+    : 'Invoking LLM...');
+
+  try {
+    const res = await fetch('/api/invoke', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        role_id: currentRole,
+        params: collectParams(),
+        template_override: templateOverride,
+      }),
+    });
+    const data = await res.json();
+    hideLoading();
+
+    if (data.error) {
+      toast(data.error, 'error');
+      renderError(data);
+      return;
+    }
+
+    renderPreview(data);
+    renderOutput(data);
+    applyModelMoveToBoard(data.validation);
+    switchTab('output');
+    toast(`LLM responded in ${data.elapsed_s}s`, 'success');
+  } catch (e) {
+    hideLoading();
+    toast(`Invoke failed: ${e.message}`, 'error');
+  }
+}
+
+function renderOutput(data) {
+  const v = data.validation || {};
+  const badge = document.getElementById('outputBadge');
+
+  let badgeClass, badgeText;
+  if (v.valid) {
+    badgeClass = 'green'; badgeText = 'LEGAL';
+  } else if (v.parsed) {
+    badgeClass = 'red'; badgeText = 'ILLEGAL';
+  } else {
+    badgeClass = 'yellow'; badgeText = 'PARSE';
+  }
+  badge.className = `tab-badge ${badgeClass}`;
+  badge.textContent = badgeText;
+  badge.style.display = 'inline-flex';
+
+  let validationHtml = '';
+  if (v.valid) {
+    validationHtml = `<span class="validation-badge valid">&#x2714; Legal Move: ${v.move}</span>`;
+  } else if (v.parsed) {
+    validationHtml = `<span class="validation-badge invalid">&#x2718; Illegal Move: ${v.move} &mdash; ${escapeHtml(v.error || '')}</span>`;
+  } else if (v.error) {
+    validationHtml = `<span class="validation-badge no-output">&#x26A0; ${escapeHtml(v.error)}</span>`;
+  }
+
+  let toolCallsHtml = '';
+  if (data.tool_calls_text) {
+    toolCallsHtml = `
+      <div class="message-block">
+        <div class="message-role" style="color: var(--yellow);">Tool Calls</div>
+        <div class="code-block">${escapeHtml(data.tool_calls_text)}</div>
+      </div>`;
+  }
+
+  const container = document.getElementById('outputContent');
+  container.innerHTML = `
+    <div class="output-section">
+      <div class="stats-row">
+        <div class="stat">
+          <div class="stat-label">Time</div>
+          <div class="stat-value blue">${data.elapsed_s}s</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Prompt Tokens</div>
+          <div class="stat-value">${data.prompt_tokens || 0}</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Completion Tokens</div>
+          <div class="stat-value">${data.completion_tokens || 0}</div>
+        </div>
+        ${data.steps_taken ? `
+        <div class="stat">
+          <div class="stat-label">ReAct Steps</div>
+          <div class="stat-value">${data.steps_taken}</div>
+        </div>` : ''}
+      </div>
+
+      <div>${validationHtml}</div>
+
+      ${toolCallsHtml}
+
+      <div class="message-block">
+        <div class="message-role ai">LLM Output</div>
+        <div class="code-block">${escapeHtml(data.raw_output)}</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderError(data) {
+  const container = document.getElementById('outputContent');
+  container.innerHTML = `
+    <div class="output-section">
+      <div class="message-block">
+        <div class="message-role" style="color: var(--red);">Error</div>
+        <div class="code-block" style="border-color: var(--red);">${escapeHtml(data.error)}</div>
+      </div>
+      ${data.traceback ? `
+      <div class="message-block">
+        <div class="message-role" style="color: var(--text-muted);">Traceback</div>
+        <div class="code-block" style="font-size: 11px; color: var(--text-secondary);">${escapeHtml(data.traceback)}</div>
+      </div>` : ''}
+    </div>
+  `;
+  switchTab('output');
+}
+
+// ── Template Save / Reset ─────────────────────────────────────────
+async function saveTemplate() {
+  if (!currentRole) return;
+  const editor = document.getElementById('templateEditor');
+  try {
+    const res = await fetch('/api/save-prompt', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role_id: currentRole, template: editor.value }),
+    });
+    const data = await res.json();
+    if (data.error) { toast(data.error, 'error'); return; }
+    originalTemplate = editor.value;
+    document.getElementById('templateModified').classList.remove('visible');
+    toast(`Saved to ${data.path}`, 'success');
+  } catch (e) {
+    toast(`Save failed: ${e.message}`, 'error');
+  }
+}
+
+function resetTemplate() {
+  if (!currentRole) return;
+  document.getElementById('templateEditor').value = originalTemplate;
+  document.getElementById('templateModified').classList.remove('visible');
+  toast('Template reset to last saved version', 'info');
+}
+
+// ── Utility ──────────────────────────────────────────────────────
+function escapeHtml(text) {
+  if (!text) return '';
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function showLoading(text) {
+  document.getElementById('loadingText').textContent = text || 'Loading...';
+  document.getElementById('loadingOverlay').classList.add('active');
+}
+function hideLoading() {
+  document.getElementById('loadingOverlay').classList.remove('active');
+}
+
+function toast(message, type = 'info') {
+  const container = document.getElementById('toastContainer');
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = message;
+  container.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 3500);
+}
+
+// ── Keyboard shortcuts ──────────────────────────────────────────
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    e.preventDefault();
+    doInvoke();
+  }
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'Enter') {
+    e.preventDefault();
+    doPreview();
+  }
+});
+</script>
+
+</body>
+</html>

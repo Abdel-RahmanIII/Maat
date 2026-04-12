@@ -1,0 +1,16 @@
+A chess move was rejected by the rule engine. Your job is to translate the error into a clear, pedagogical explanation that helps the player understand why the move is illegal and what alternatives exist.
+
+Position (FEN): {fen}
+Board:
+{board_ascii}
+
+Rejected move (UCI): {proposed_move}
+Error type: {error_type}
+Error message: {error_reason}
+
+Provide a clear explanation that:
+1. Describes why the move is illegal using plain language.
+2. References the specific piece positions and rules involved.
+3. Suggests one or two concrete legal alternatives in UCI notation.
+
+Keep your explanation concise (3-5 sentences). Do not repeat the error verbatim.

@@ -1,0 +1,35 @@
+puzzle_id,fen,rating,phase,fullmove_number,moves,rating_deviation,popularity,nb_plays,themes,piece_count,major_pieces,difficulty,phase_source,heuristic_phase
+TBlnx,5rk1/4q1pp/4pn2/4N3/p2P1p1Q/2PB1P1K/r6P/6R1 b - - 1 37,1780,middlegame,37,a4a3 d3h7 f6h7 h4e7,74,83,397,middlegame,19,10,hard,theme,middlegame
+6FOPu,r2qk2r/pp2ppb1/3p1Bp1/3P3p/4P1bP/2N2B2/PP3PP1/R2QK2R b KQkq - 0 12,1788,middlegame,12,g4f3 d1a4 b7b5 a4b5 e8f8 f6g7,74,94,2516,middlegame,27,13,hard,theme,opening
+aWfxA,1k3qrb/1p3p2/2brpP2/Qp6/5B2/8/PP2BPPP/3R2K1 b - - 3 27,1818,middlegame,27,g8g2 g1f1 g2g1 f1g1 f8g8 f4g3,74,84,428,middlegame,21,11,hard,theme,middlegame
+WZrfo,1r1q1n1k/p5pp/1p2r3/2bBP2Q/2Pp4/4P3/PP3P1P/3R2RK b - - 7 23,1887,middlegame,23,e6h6 h5h6 d8d5 c4d5,74,93,1092,middlegame,23,11,hard,theme,middlegame
+ftGef,2k2r2/3n1p2/2p4p/ppb2np1/4N3/1BP5/PP4PP/1KBR4 b - - 1 25,1792,middlegame,25,f5e3 d1d7 c8d7 e4c5 d7c8 c1e3,74,87,199,middlegame,21,10,hard,theme,middlegame
+GzBjh,4r1k1/pppq1p1p/3p2pB/4bbQ1/4r3/3B4/PPP3PP/4RR1K b - - 10 27,1736,middlegame,27,e4g4 d3f5 d7f5 f1f5 g4g5 f5g5,74,93,911,middlegame,24,12,hard,theme,middlegame
+LUbSX,4r1k1/n1q2ppp/1p3bb1/3Q4/8/1NP2NPP/PP3PB1/R5K1 w - - 1 23,1713,middlegame,23,a1d1 e8d8 d5d8 f6d8,74,96,3533,middlegame,22,12,hard,theme,middlegame
+gyjSF,4r1k1/1p3ppp/2np1n2/p7/5P2/1NP2PP1/PP1Br2P/R4RK1 w - - 0 17,1857,middlegame,17,a1e1 a5a4 e1e2 e8e2 f1d1 a4b3,73,96,1778,middlegame,23,10,hard,theme,middlegame
+RQUkI,r6k/pp3pbp/q3bNp1/4R1P1/8/1P2QP2/2P5/2KR4 w - - 1 32,1735,middlegame,32,e5e6 a6a1 c1d2 a8d8 d2e2 a1d1,74,91,1470,middlegame,19,10,hard,theme,middlegame
+kkW8M,4r1k1/p1q1rp1p/1p1p1Qp1/2nB2P1/2P5/1P5P/P5K1/4RR2 b - - 4 30,1830,middlegame,30,c5e4 e1e4 e7e4 d5f7 c7f7 f6f7,74,96,3529,middlegame,21,10,hard,theme,middlegame
+B9vNP,3rr3/p7/kn5p/n1Rp1q2/6p1/Q2P4/1P5P/1K1R4 b - - 3 38,1833,middlegame,38,d8b8 c5a5 a6b7 a5a7,74,80,140,middlegame,17,10,hard,theme,middlegame
+JQn8D,5rk1/1pb4p/2p1pnP1/2PpPp2/1P1P4/4P1RQ/3N2PK/q7 b - - 0 26,1850,middlegame,26,f6g4 g3g4 c7e5 d4e5,74,81,141,middlegame,22,9,hard,theme,middlegame
+nAw1b,2r2rk1/pp4pp/1q1b1p2/3p4/8/2P1pN1P/PPRN1QP1/4R1K1 w - - 0 23,1856,middlegame,23,f2e3 d6c5 f3d4 c5d4 c3d4 c8c2,74,93,716,middlegame,23,11,hard,theme,middlegame
+5vMCi,2qr2k1/RR3pp1/3pb2p/4p3/4P2Q/2r4P/5PPK/8 b - - 16 32,2117,middlegame,32,e6h3 b7f7 d8d7 a7d7 c8d7 f7d7,74,85,501,middlegame,18,9,hard,theme,middlegame
+YVzyZ,r1b2rk1/pp2bppp/4pn2/6B1/3q4/2NB4/PP2QPPP/3R1RK1 b - - 1 13,1774,middlegame,13,d4g4 e2g4 f6g4 g5e7,74,86,314,middlegame,25,14,hard,theme,middlegame
+oilNq,r1b1k1nr/pp1p1ppp/2p5/4Q3/2P1P2q/3PBB2/PP1K1P2/R7 b kq - 0 16,1749,middlegame,16,h4e7 e5g7 e7f6 e3d4 f6g7 d4g7,74,94,601,middlegame,24,11,hard,theme,middlegame
+Fk1n7,r1b2r1k/p7/1p3pQp/3B4/4pq2/5p2/PP3P1P/3R1R1K b - - 0 29,2026,middlegame,29,c8h3 d5e4 h3g2 h1g1 f4e4 g6e4,74,93,1036,middlegame,20,10,hard,theme,middlegame
+z1V4c,6k1/p2n1pp1/5np1/8/2BP1PPq/2P1r2P/P2R2Q1/5RK1 w - - 3 24,1898,middlegame,24,f1f3 e3f3 g2f3 h4e1 c4f1 e1d2,74,86,281,middlegame,20,10,hard,theme,middlegame
+ZQwvx,r7/p2bRp1k/3p1Q1p/2pP2r1/1pP4q/1P6/P5PP/5RK1 b - - 1 27,1785,middlegame,27,g5g2 g1g2 d7h3 g2h1 h4f6 f1f6,74,92,644,middlegame,21,9,hard,theme,middlegame
+u0Dw2,1r3r1k/1p1n2b1/3NQ3/p3P1B1/P2P3P/5q2/1P6/R3R1K1 w - - 0 28,1860,middlegame,28,e6d7 f3g3 g1h1 f8f2,74,86,332,middlegame,19,12,hard,theme,middlegame
+IGlEN,2kr4/pbq4p/1pp3p1/5p2/2Q2b2/1P3BP1/PB5P/1K5R b - - 0 27,1951,middlegame,27,f4e5 c4e6 c7d7 e6d7 d8d7 b2e5,74,79,200,middlegame,20,10,hard,theme,middlegame
+FWBhO,rnbk1r2/6q1/p1p1pP1b/1p3P1B/3P3Q/2P2RP1/PP5P/5RK1 b - - 0 34,1702,middlegame,34,g7f6 f5e6 f6h4 f3f8 h6f8 f1f8,74,87,330,middlegame,24,12,hard,theme,middlegame
+hUJTm,r1b2kr1/p6p/1qp1p2Q/3p4/3b4/5N2/PPP2PPP/R3R1K1 b - - 0 19,1823,middlegame,19,g8g7 h6f4 g7f7 f4d4 b6d4 f3d4,74,95,3848,middlegame,22,11,hard,theme,middlegame
+nUDA2,r1b4r/pp4b1/1q1p1k1p/3PnPpQ/3pP2P/P7/1P4P1/R1B2R1K b - - 0 21,1768,middlegame,21,c8d7 h4g5 f6e7 f5f6 g7f6 g5f6,74,94,910,middlegame,25,12,hard,theme,middlegame
+Q5F0s,5rk1/p1p4p/2B2pp1/3P4/1qb1Rn2/5PN1/6PP/Q5K1 b - - 2 26,1924,middlegame,26,b4c5 a1d4 c5d4 e4d4 f4e2 g3e2,74,92,467,middlegame,19,10,hard,theme,middlegame
+bIIWM,6r1/pb5k/1p4pp/2rpQ3/5nBP/2P2Pq1/PP6/2KR2NR w - - 4 25,1813,middlegame,25,h1h3 f4d3 d1d3 g3e5,74,94,1714,middlegame,22,12,hard,theme,middlegame
+SdOeA,r3r1k1/p2p1pp1/b6p/1qp5/8/2P1BN2/P1PQ1PPP/R3K2R w KQ - 2 16,1725,middlegame,16,d2d3 b5b2 e1g1 a6d3,74,89,439,middlegame,23,11,hard,theme,middlegame
+Gn1vq,6k1/p1r1ppb1/2q3p1/4n2p/4N3/2PQB1P1/PP3P1P/3R2K1 w - - 2 24,1894,middlegame,24,d3d5 c7d7 d5d7 e5d7,74,93,1536,middlegame,21,10,hard,theme,middlegame
+SbiD6,r1r4Q/1b2kpN1/3p1q2/p3p3/2p1P3/P1P3RP/1P3PP1/R5K1 w - - 5 37,1782,middlegame,37,g7f5 f6f5 h8h4 f5f6 h4f6 e7f6,74,93,1175,middlegame,22,10,hard,theme,middlegame
+Lz6zC,4rrk1/pp3p1p/1q1pR1p1/3b1PQ1/1P1p4/P2B4/3P2PP/5RK1 b - - 2 21,1739,middlegame,21,d5e6 f5f6 b6d8 g5h6 d8f6 f1f6,74,95,2990,middlegame,23,10,hard,theme,middlegame
+5Bqx0,rn1qkb2/p4pp1/2p3p1/3n2P1/2P1p3/1B5r/PP3P2/RNBQ1RK1 w q - 0 15,1977,middlegame,15,c4d5 d8d6 f2f4 e4f3,74,95,3298,middlegame,25,14,hard,theme,middlegame
+7JN5I,4r1k1/pp4p1/4p2p/3pNp2/3P3q/2P3r1/PP1KQ3/R4R2 w - - 0 29,1972,middlegame,29,f1g1 h4g5 d2c2 g3g1 a1g1 g5g1,74,92,1105,middlegame,20,9,hard,theme,middlegame
+ij7h4,r4rk1/pp2b1pp/2n5/2p1p2n/3pN1qP/1P1P1NP1/PBP1QPK1/R3R3 w - - 4 20,1813,middlegame,20,f3h2 h5f4 g2h1 g4e2 e1e2 f4e2,74,95,3679,middlegame,28,14,hard,theme,middlegame
+Qiasy,1k3r2/ppqn4/2ppB1p1/P3p1B1/4P1n1/3P4/1PPQK3/7R b - - 3 31,1768,middlegame,31,f8f2 e2e1 f2d2 h1h8 c7c8 h8c8 b8c8 e1d2,74,89,162,middlegame,21,10,hard,theme,middlegame

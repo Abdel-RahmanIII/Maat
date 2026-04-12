@@ -6,28 +6,45 @@
 
 ## Purpose
 
-Provides helper tools aligned with Condition F (ReAct + tool calling) requirements.
+Provides chess analysis tools for use by the ReAct agent (Condition F). All functions are decorated with `@tool` and are bound dynamically based on input mode:
 
-## APIs
+- `fen` mode (Experiments 1 and 2): full tool catalog.
+- `history` mode (Experiment 3): safe subset only (no board-revealing tools).
+
+## Tool APIs
+
+Tools are invoked via LangChain's tool-calling protocol.
+
+| Tool | Signature | Returns |
+|------|-----------|---------|
+| `validate_move` | `(fen: str, move_uci: str)` | JSON `{"legal": bool, "reason": str, "rule_ref": str, "error_type": str | null}` |
+| `is_in_check` | `(fen: str)` | JSON `{"in_check": bool, "checking_squares": list[str]}` |
+| `get_game_phase` | `(move_history: list[str])` | String: `"opening" | "middlegame" | "endgame"` |
+| `get_move_history_pgn` | `(move_history: list[str])` | PGN move text string |
+| `get_board_visual` | `(fen: str)` | ASCII board string |
+| `get_piece_at` | `(fen: str, square: str)` | Piece code (`"wN"`, `"bQ"`) or `"empty"` |
+| `get_attackers` | `(fen: str, square: str)` | JSON list of `{square, piece, color}` |
+| `get_defenders` | `(fen: str, square: str)` | JSON list of defenders of the square occupant |
+| `is_square_safe` | `(fen: str, square: str, color: str)` | JSON `{"safe": bool, "threats": list[str]}` |
+| `get_position_after_moves` | `(fen: str, moves: list[str])` | Resulting FEN string |
+| `submit_move` | `(uci_move: str)` | Sentinel string `"SUBMIT:<move>"` |
+
+## Convenience Export
 
 ```python
-validate_move(fen: str, uci_move: str) -> dict[str, bool | str]
-get_board_state(fen: str) -> str
-get_legal_moves(fen: str) -> list[str]
-get_piece_moves(fen: str, square: str) -> list[str]
-get_attacked_squares(fen: str, color: str) -> list[str]
+from src.tools.chess_tools import ALL_TOOLS, get_tools_for_input_mode
 ```
 
-## Behavior Notes
+- `ALL_TOOLS`: full catalog for `fen` mode.
+- `get_tools_for_input_mode(input_mode)`: returns mode-appropriate tools (`fen` vs `history`).
 
-- `validate_move` delegates to symbolic validator and returns `{valid, reason}`.
-- `get_board_state` returns a multi-line prompt-friendly snapshot including FEN, side-to-move, counters, and ASCII board.
-- `get_legal_moves` returns all legal moves in UCI format.
-- `get_piece_moves` validates square format and filters legal moves from that source square.
-- `get_attacked_squares` accepts color aliases (`white`, `black`, `w`, `b`) and returns attacked algebraic squares.
+## `submit_move` Semantics
+
+`submit_move` is a sentinel tool. When the ReAct agent calls it, the loop terminates and the submitted move undergoes ground-truth validation. It does not perform any validation itself.
 
 ## Error Cases
 
-- Invalid FEN in any tool -> raises `ValueError`.
-- Invalid square string in `get_piece_moves` -> raises `ValueError`.
-- Invalid color string in `get_attacked_squares` -> raises `ValueError`.
+- Invalid FEN in board-dependent tools → raises `ValueError`.
+- Invalid square string in square-dependent tools → raises `ValueError`.
+- Invalid color string in `is_square_safe` → raises `ValueError`.
+- Invalid or illegal sequence in `get_move_history_pgn` / `get_position_after_moves` → raises `ValueError`.

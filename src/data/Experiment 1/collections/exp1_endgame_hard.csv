@@ -1,0 +1,34 @@
+puzzle_id,fen,rating,phase,fullmove_number,moves,rating_deviation,popularity,nb_plays,themes,piece_count,major_pieces,difficulty,phase_source,heuristic_phase
+2tw5C,6k1/5R2/3p3Q/2pPb3/1p2P1q1/6Pp/1r5P/4R2K b - - 0 37,1717,endgame,37,g8f7 e1f1 e5f4 f1f4 g4f4 h6f4,74,94,1390,endgame,16,8,hard,theme,middlegame
+Kx4wT,r5k1/pR4bp/6p1/2B2pP1/3p1P2/1P1P1K1P/1r6/R7 b - - 1 28,1885,endgame,28,a8e8 b7g7 g8g7 c5d4 g7g8 d4b2,74,87,407,endgame,18,8,hard,theme,middlegame
+T2B6M,2k1r3/ppp2p2/8/2b1P1pp/8/2P2KBP/PP1r1PP1/R3R3 w - - 1 19,1743,endgame,19,e1e2 g5g4 h3g4 h5g4 f3g4 d2e2,74,95,3610,endgame,21,8,hard,theme,middlegame
+etE9j,6R1/r4k2/5p2/5p2/5P1K/6P1/8/8 w - - 6 51,1908,endgame,51,g8h8 a7a1 g3g4 a1h1 h4g3 h1h8,74,77,144,endgame,8,4,hard,theme,endgame
+FbYfT,5k2/1p3q2/p4r2/3pR3/2pQ4/2P4P/PP4P1/6K1 w - - 2 37,1842,endgame,37,d4d5 f6f1 g1h2 f7f4 g2g3 f1f2,74,93,1087,endgame,15,6,hard,theme,middlegame
+zoqxz,3rR3/1p3P1p/8/6P1/2k5/7P/2p2P2/4K3 w - - 0 40,1804,endgame,40,f7f8q c2c1q e1e2 c1d1,74,92,2047,endgame,11,4,hard,theme,endgame
+6NSYf,6k1/1pb1Qpp1/7p/p2r4/8/P1Nq4/1P3PPP/5R1K w - - 2 28,1795,endgame,28,f1e1 d5e5 e7e5 c7e5,74,96,4198,endgame,18,8,hard,theme,middlegame
+QzOv6,5k2/1qpQ1pr1/1p5p/p4R2/8/2P1r1P1/P6P/5RK1 b - - 1 26,1881,endgame,26,e3g3 h2g3 g7g3 g1f2 b7g2 f2e1 g3e3 e1d1 g2e2 d1c1 e3c3 c1b1 e2d3 d7d3,74,85,237,endgame,17,8,hard,theme,middlegame
+adcry,2r2n2/ppp2k1p/4Rpp1/3p1P2/1q1P3N/1P2Q3/P1P3PP/6K1 w - - 1 25,2012,endgame,25,f5g6 h7g6 c2c3 b4a3 e6f6 f7f6,74,96,355,endgame,22,8,hard,theme,middlegame
+HKt2m,4R3/ppr2kp1/8/1B3p2/6p1/1K4R1/PPP2b2/8 w - - 2 32,1929,endgame,32,g3c3 c7c3 b3c3 g4g3 e8e2 g3g2 e2f2 g2g1q,74,92,626,endgame,15,7,hard,theme,middlegame
+UGB0Y,8/bpp3k1/3pq1p1/p3P2r/4N3/P1Q4P/1PP4K/4R3 b - - 0 29,1962,endgame,29,e6e5 e4g3 e5c3 g3h5 g6h5 b2c3,74,93,2989,endgame,18,8,hard,theme,middlegame
+Vz9z9,8/8/2k3K1/2P5/7n/7p/4N3/8 w - - 2 57,1992,endgame,57,g6h5 h4f5 h5g5 h3h2 g5f5 h2h1q,74,82,144,endgame,6,4,hard,theme,endgame
+AViOb,3Q4/kp5r/2p3p1/p1NpP3/P1nP4/6P1/1PP2qP1/1K4R1 w - - 5 31,1829,endgame,31,g1c1 f2d4 d8a5 c4a5,74,93,1427,endgame,20,8,hard,theme,middlegame
+woWA3,7n/p2k4/3p4/5RN1/1P4PP/P2p4/2r5/5K2 w - - 0 42,1749,endgame,42,h4h5 c2c1 f1f2 d3d2,74,92,616,endgame,13,6,hard,theme,endgame
+sqXV5,4r3/R1Pk4/7p/5pb1/3K4/P7/8/6R1 w - - 1 55,1715,endgame,55,g1g2 g5e3 d4d5 e3a7 g2g7 d7c8,74,93,1353,endgame,10,6,hard,theme,endgame
+hqXPm,8/pp6/2p4p/3pPk2/3P4/7K/PP4P1/8 w - - 1 40,1772,endgame,40,h3g3 c6c5 e5e6 f5e6,74,85,337,endgame,12,2,hard,theme,endgame
+TIz9H,r4rk1/4qp2/p7/5pPp/8/1pP2Q2/1P4P1/2K3RR w - - 0 28,1859,endgame,28,f3h5 e7e3 c1b1 e3e4 b1a1 e4a4,74,92,521,endgame,17,8,hard,theme,middlegame
+Jso59,1r4k1/2Q2pp1/2p5/p2p4/P5Pp/4qP1K/2P2R1P/1r3R2 w - - 10 34,1701,endgame,34,c7c6 b1f1 f2f1 e3e2 f1a1 e2f3,74,93,991,endgame,19,8,hard,theme,middlegame
+eN3sI,4r2k/1pQ2Rp1/p7/7p/8/P6P/1qP3P1/7K w - - 0 30,1824,endgame,30,c7b7 e8e1 h1h2 b2e5 g2g3 e1e2,74,96,3046,endgame,14,6,hard,theme,middlegame
+JNLfz,2r3k1/2q3pp/p3b3/5p2/2p2P2/P1Q1PBKP/3R2P1/8 b - - 0 33,2079,endgame,33,c8d8 c3e5 d8d2 e5c7,74,93,1877,endgame,18,8,hard,theme,middlegame
+hRPO1,4r1k1/pp3p2/2p2n2/6p1/6P1/1P2NK2/P1Pr4/4RR2 b - - 0 29,1861,endgame,29,f6d5 e3d5 e8e1 d5f6 g8g7 f6h5 g7g6 f1e1,74,89,159,endgame,17,8,hard,theme,middlegame
+9x3p7,4r1k1/pp6/4pQpp/2p4q/4P3/2P2NP1/Pr5P/3R2K1 b - - 3 29,2318,endgame,29,b2h2 d1d7 h2h1 g1f2 h5f3 f6f3 e8f8 d7d8 f8d8 f3h1,74,85,102,endgame,19,8,hard,theme,middlegame
+52PlX,8/k7/1p1RP3/p2Pp3/P7/5P2/4K2p/7r b - - 0 43,1867,endgame,43,h1a1 d6d7 a7a6 d7h7 h2h1q h7h1,74,94,3548,endgame,12,4,hard,theme,endgame
+cIHaZ,6k1/p1q2ppp/1rP1p3/8/2p5/5BPP/P1Q2P2/6K1 b - - 0 30,1920,endgame,30,b6c6 c2a4 c4c3 f3c6,74,89,128,endgame,17,6,hard,theme,middlegame
+ei3rf,6k1/5pp1/4q1n1/3pP2R/1P1Q4/2P4P/4r1PK/2B5 w - - 1 27,1860,endgame,27,c1f4 e2e4 d4a7 e4f4,74,86,111,endgame,16,8,hard,theme,middlegame
+qzkNt,8/8/p3k1p1/PP3pP1/4p3/2PpK3/8/8 b - - 0 43,1725,endgame,43,a6b5 a5a6 f5f4 e3d2 e4e3 d2d3,74,93,1320,endgame,11,2,hard,theme,endgame
+6Rw9Y,4k3/pp6/2p3p1/3p2p1/3P1PP1/P1P3K1/1P6/8 b - - 0 30,1776,endgame,30,g5f4 g3f4 e8f7 f4e5,74,86,421,endgame,14,2,hard,theme,middlegame
+UrKL3,8/3Q1p1k/6pp/4P3/8/2p3PP/1q3PK1/8 b - - 1 36,1918,endgame,36,h7g7 e5e6 c3c2 d7f7 g7h8 e6e7 b2b7 g2h2 b7e7 f7e7,74,93,458,endgame,12,4,hard,theme,middlegame
+ZPUwn,8/8/4pp2/6k1/3P2P1/5KP1/8/8 w - - 1 57,2225,endgame,57,f3e4 g5g4 d4d5 f6f5 e4e3 e6d5,74,94,2243,endgame,7,2,hard,theme,endgame
+KEI8I,2r5/Q2Rpk1p/4qpp1/8/P6P/6P1/5PK1/8 w - - 1 38,1918,endgame,38,a4a5 e6e4 g2h2 c8c1 d7e7 e4e7,74,89,299,endgame,14,6,hard,theme,middlegame
+d4gaq,5rk1/5p2/4pqp1/Q2p4/P7/8/1PP2P2/1K5R b - - 0 36,1736,endgame,36,f6f2 a5c3 d5d4 c3h3 g8g7 h3h6 g7f6 h6f8,74,95,4028,endgame,14,6,hard,theme,middlegame
+TTDni,8/pp4kp/6p1/3P1pQ1/3p4/3P1P1P/Pq2r1P1/5RK1 b - - 3 26,2062,endgame,26,b2d2 g5d2 e2d2 d5d6 g7f6 f1e1 d2d1 e1d1,74,87,162,endgame,18,6,hard,theme,middlegame
+AwQnT,8/8/pp2k1p1/5p1p/PP1K1P1P/6P1/8/8 w - - 4 44,1721,endgame,44,a4a5 b6a5 b4a5 e6d6 d4c4 d6c6,74,88,170,endgame,12,2,hard,theme,endgame

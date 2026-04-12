@@ -1,0 +1,35 @@
+puzzle_id,fen,rating,phase,fullmove_number,moves,rating_deviation,popularity,nb_plays,themes,piece_count,major_pieces,difficulty,phase_source,heuristic_phase
+X20de,r1br2k1/1p2pp1p/pq3bp1/3Pn3/4P3/1NN5/PP2BPPP/2RQ1RK1 w - - 0 14,1279,middlegame,14,d1d4 e5f3 e2f3 f6d4,74,96,4520,middlegame,27,14,easy,theme,middlegame
+uQlt5,4r1k1/pp3pp1/2pp4/5b2/1b2r3/1B4B1/PPP2PPP/R3RK2 w - - 5 24,1294,middlegame,24,c2c3 e4e1 a1e1 f5d3,74,96,2443,middlegame,22,10,easy,theme,middlegame
+eOfM7,r1b3k1/pp2rppp/5n2/1B2p3/3q4/3Q3P/PPP2PP1/R4RK1 b - - 1 17,1281,middlegame,17,d4b2 d3d8 e7e8 b5e8,74,98,2176,middlegame,23,11,easy,theme,middlegame
+fJxZe,2b1r1k1/1pr2ppR/p7/P1BPb3/6q1/2PB2P1/3Q3P/5RK1 w - - 3 30,1212,middlegame,30,c5d4 e5d4 c3d4 g4d4,74,97,821,middlegame,21,12,easy,theme,middlegame
+KCTui,r3k2r/p4pp1/b1p1p2q/2P1N3/5P2/4P1n1/PP4Q1/3RR1K1 w kq - 0 23,1119,middlegame,23,g2g3 h6h1 g1f2 h8h2 g3h2 h1h2,74,98,1002,middlegame,21,11,easy,theme,middlegame
+ZaNqg,r5k1/ppp1qppp/5n2/2r5/8/2BQP3/PP3PPP/1K1R3R b - - 0 19,1241,middlegame,19,c5d5 c3f6 d5d3 f6e7 d3d1 h1d1,74,95,5121,middlegame,22,10,easy,theme,middlegame
+liOfh,1r2r1k1/p4ppp/q4n2/8/3Q1N2/2BP2PP/bPP2P2/R4RK1 w - - 4 21,1262,middlegame,21,d4c4 a2c4 a1a6 c4a6,74,74,183,middlegame,22,12,easy,theme,middlegame
+JioCs,2r2rk1/1p3pp1/pq1p1b1p/3Pp3/1P2P1b1/P1NQ1N2/5PPP/2R2RK1 b - - 0 17,1232,middlegame,17,c8c7 c3a4 c7c1 a4b6,74,92,1382,middlegame,26,12,easy,theme,middlegame
+TdTfW,r4rk1/pb4pp/1p2p3/3pP1q1/3Pp3/2P5/PPQ3PP/R3RNK1 w - - 0 17,1185,middlegame,17,c2d2 f8f1 e1f1 g5d2,74,89,383,middlegame,24,10,easy,theme,middlegame
+UYdtc,r1b1k2r/ppp1qppp/2nb4/3Bp3/8/4PNP1/PPQP1P1P/R1B1K2R b KQkq - 0 9,1128,middlegame,9,c8e6 d5c6 b7c6 c2c6 e7d7 c6a8,74,100,1196,middlegame,28,14,easy,theme,opening
+kh28O,5r1k/2b2q1p/2p4P/1rP1p1p1/3pP1p1/3P1bB1/3Q1P1R/5RK1 b - - 5 40,1203,middlegame,40,c7a5 g3e5 h8g8 d2g5 f7g6 g5g6 h7g6 h6h7,74,97,933,middlegame,22,11,easy,theme,endgame
+06skk,4k3/r1p5/5Kpp/2N2b2/2BR4/1Pr4P/8/8 b - - 2 32,1207,middlegame,32,c3f3 c4f7 e8f8 d4d8,74,100,1524,endgame mate matein2 short,13,8,easy,heuristic,middlegame
+0egnd,r1b1rk2/pp1qn1pp/8/2QB2B1/8/2P3P1/PP3P1P/RN4K1 b - - 2 19,1087,middlegame,19,d7d5 g5e7 e8e7 c5d5,74,99,1206,middlegame,22,12,easy,theme,middlegame
+oL7N4,B4rk1/p4p1p/1p1Rp1p1/2p1q3/6Q1/6P1/P1P1bP1P/3R2K1 w - - 0 20,1259,middlegame,20,g4f4 e5f4 g3f4 e2d1 d6d1 f8a8,74,99,3459,middlegame,21,9,easy,theme,middlegame
+Qj8Vc,r6r/2q1kppp/p2bp3/1p6/4Qn2/1PN5/1P3PPP/R2R2K1 b - - 2 19,1025,middlegame,19,f4g6 c3d5 e7f8 d5c7,74,99,897,middlegame,22,11,easy,theme,middlegame
+vSFJB,r3r1k1/2q3pp/pp3p2/3Pn2Q/2P1NP2/3p2P1/P6P/4RRK1 b - - 1 24,1180,middlegame,24,e5c4 e4f6 g7f6 e1e8 a8e8 h5e8,74,95,1120,middlegame,22,10,easy,theme,middlegame
+tpZxF,r5k1/p1q3bp/2pp2p1/4pr1n/7B/2NQ4/PPP2PPP/3R1RK1 b - - 1 17,1280,middlegame,17,d6d5 c3d5 c6d5 d3d5 c7f7 d5a8,74,95,5039,middlegame,24,12,easy,theme,middlegame
+pSuSY,r7/1b1pkp2/p3pp2/1pq1n2p/3NP1rP/1BP1Q1P1/PP3P2/2R2RK1 b - - 2 19,1190,middlegame,19,g4e4 d4f5 e6f5 e3c5,74,96,4272,middlegame,26,12,easy,theme,middlegame
+b5UZY,1r2br1k/1qp1b1pQ/p1p2p2/4pP2/2B1N3/1P1R4/P1P3PP/5RK1 b - - 0 23,1047,middlegame,23,h8h7 d3h3 e8h5 h3h5,74,99,1828,mate matein2 middlegame pillsburysmate short,24,12,easy,heuristic,middlegame
+QIQoM,2kr1b1r/ppp3p1/2n1q2p/5p2/3Pp1b1/2P1B1P1/PP1NPPBP/R2Q1RK1 w - - 0 15,1285,middlegame,15,f2f3 e4f3 e2f3 e6e3,74,84,832,advantage discoveredattack kingsideattack middlegame short,29,14,easy,heuristic,middlegame
+nOPmy,r4rk1/pp1bnppp/4p3/3pq3/8/P7/3BBPPP/2RQR1K1 b - - 5 19,1182,middlegame,19,e5d6 d2b4 d6f4 b4e7,74,95,3912,middlegame,23,12,easy,theme,middlegame
+iQ7wO,3r2k1/8/RNn2p1p/8/4p2P/2K5/1P3PP1/8 w - - 0 33,1230,middlegame,33,b6c4 d8d3 c3c2 c6b4 c2c1 b4a6,74,100,407,advantage endgame exposedking fork long,13,6,easy,heuristic,middlegame
+UMaGG,r1b2r2/pp2ppkp/1q4p1/3p2Q1/8/2nB1PN1/P1P3PP/R4R1K b - - 3 16,1273,middlegame,16,b6f6 g3h5 g7g8 h5f6,74,99,1043,crushing middlegame pin short,24,12,easy,heuristic,middlegame
+Qdq4r,2r2k1r/1p4bp/pq1PQpp1/1Np1pn2/8/4BN2/P1P2PPP/R4RK1 w - - 3 18,1293,middlegame,18,d6d7 b6e6 d7c8q e6c8,74,88,165,middlegame,26,13,easy,theme,middlegame
+jKjEF,1r1r2k1/1q3pp1/p6p/2P1p3/3PQ3/1Nn1P1P1/P3BPP1/5RK1 w - - 1 27,1200,middlegame,27,e4b7 c3e2 g1h2 b8b7,74,91,762,middlegame,22,10,easy,theme,middlegame
+XHmse,r3k2r/1pp1qp1p/p4p2/2bpp3/4P2B/1P1P1N2/1P1Q1PPP/R3K2R w KQkq - 0 14,1170,middlegame,14,e4d5 c5b4 e1g1 b4d2,74,97,2031,middlegame,26,11,easy,theme,middlegame
+FM810,r1bq3k/pppp3p/6n1/7Q/8/2b5/P1P2PPP/1RB1R1K1 b - - 1 17,1283,middlegame,17,c3e1 c1b2 e1c3 b2c3 h8g8 h5d5,74,92,1031,middlegame,21,11,easy,theme,middlegame
+IXCLp,r3nrk1/1pq2ppp/p1b1p3/4P1B1/P1Bp4/3P2Q1/1PP3PP/R4RK1 w - - 1 17,1264,middlegame,17,c4e6 f7e6 f1f8 g8f8 a1f1 f8g8,74,85,389,middlegame,26,12,easy,theme,middlegame
+Jvpeh,r2q1r1k/1pp1n1bp/p1np2pB/5p2/3PP3/2N2B1P/PP1Q1PP1/R4RK1 b - - 1 14,1072,middlegame,14,c6d4 h6g7 h8g7 d2d4,74,99,596,advantage attraction intermezzo kingsideattack middlegame short,28,14,easy,heuristic,middlegame
+Wfetp,4q3/P1Rb2p1/4p3/2Q1B1pk/4Pp2/5P1P/1r1r2P1/2R3K1 w - - 1 45,1297,middlegame,45,e5d4 d2g2 g1f1 d7b5,74,84,274,middlegame,19,10,easy,theme,endgame
+hD4BR,r1b4r/pp1pkp1p/2n1pqp1/8/2P1QN2/P2B4/5PPP/3R1RK1 b - - 5 17,1282,middlegame,17,h8e8 f4d5 e7d8 d5f6,74,97,2627,middlegame,24,12,easy,theme,middlegame
+nYWyo,rn3rk1/ppp3pp/3p2p1/8/2nPN1Pq/1P5P/P4PK1/R1BQ1R2 b - - 0 16,1294,middlegame,16,c4b6 c1g5 h4g5 e4g5,74,95,1183,middlegame,25,12,easy,theme,middlegame
+M3KDs,r4rk1/p1pq1ppp/3b4/1p1p4/3P4/2P1BQ2/PP3PPP/R4RK1 w - - 0 15,935,middlegame,15,f3d5 d6h2 g1h2 d7d5,74,100,494,middlegame,24,10,easy,theme,middlegame
+f6q2C,r1bq1r1k/pp2p2p/3p1p2/3P1P1Q/2PBR3/1P5P/P6K/2b5 b - - 1 26,1123,middlegame,26,d8e8 d4f6 e7f6 e4e8 f8e8 h5e8,74,97,2082,middlegame,22,10,easy,theme,middlegame

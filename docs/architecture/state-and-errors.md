@@ -2,7 +2,7 @@
 
 ## Turn State Contract
 
-`TurnState` is the shared typed payload intended for graph turn processing.
+`TurnState` is the shared typed payload used by all condition graphs for turn processing.
 
 Field groups:
 
@@ -12,9 +12,18 @@ Field groups:
 - Messages: `messages`
 - Turn metrics: `first_try_valid`, `error_types`, `tool_calls`, `total_attempts`, `llm_calls_this_turn`, `tokens_this_turn`, `prompt_token_count`
 - Critic-specific: `critic_verdict`, `ground_truth_verdict`
+- Generation strategy metadata: `generation_strategy`, `strategic_plan`, `routed_phase`
 - Game-level: `game_id`, `condition`, `turn_results`, `game_status`
 
 Initialization helper: `create_initial_turn_state(...)`.
+
+### Generation Strategy Fields
+
+| Field | Used By | Description |
+|-------|---------|-------------|
+| `generation_strategy` | All conditions | One of `generator_only`, `planner_actor`, `router_specialists` |
+| `strategic_plan` | Planner-Actor | Natural-language plan from the Strategist agent |
+| `routed_phase` | Router-Specialists | Phase classified by the Router (`opening`, `middlegame`, `endgame`) |
 
 ## Error Taxonomy
 

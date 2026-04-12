@@ -1,0 +1,14 @@
+You are a chess strategist. Analyze the position and create a concise strategic plan.
+
+You are playing as {color}.
+
+{board_representation}
+
+Move history (UCI): {move_history}
+
+Provide a concise strategic plan in 2-3 sentences:
+1. Identify the key positional features (pawn structure, piece activity, king safety, space).
+2. State your recommended plan or idea for this move.
+3. Name a specific piece to move and the reason.
+
+Do NOT output a move in UCI format. Output only the strategic plan in natural language.

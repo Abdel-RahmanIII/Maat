@@ -1,0 +1,8 @@
+You are playing chess as {color}.
+
+{board_representation}
+
+Move history (UCI): {move_history}
+{feedback_block}
+Output exactly one move in UCI format (e.g., e2e4, e7e8q).
+Respond with ONLY the UCI move, no explanation.

@@ -5,7 +5,7 @@ This documentation covers the **implemented** project state in the current repos
 ## Audience
 
 - Developers and maintainers who need module-level API details.
-- Research readers who need a clear mapping from implementation to Phase 1 goals.
+- Research readers who need a clear mapping from implementation to research goals.
 
 ## Documentation Map
 
@@ -16,11 +16,17 @@ This documentation covers the **implemented** project state in the current repos
 - Architecture:
   - [System Overview](architecture/system-overview.md)
   - [State and Error Model](architecture/state-and-errors.md)
+  - [Condition Graphs](architecture/condition-graphs.md)
 - Module reference:
   - [Validators](modules/validators.md)
   - [Tools](modules/tools.md)
   - [Data Sampler](modules/data.md)
   - [Engine Wrapper](modules/engine.md)
+  - [LLM Client](modules/llm-client.md)
+  - [Agents](modules/agents.md)
+  - [Graphs](modules/graphs.md)
+  - [Config](modules/config.md)
+  - [Prompts](modules/prompts.md)
 - Testing:
   - [Testing Guide](testing/testing-guide.md)
   - [Coverage Matrix](testing/test-coverage-matrix.md)
@@ -33,4 +39,4 @@ This documentation covers the **implemented** project state in the current repos
 
 ## Scope Note
 
-This docs set is intentionally implementation-first and excludes unimplemented planned components.
+This docs set is intentionally implementation-first and reflects Phases 1 and 2 of the project.

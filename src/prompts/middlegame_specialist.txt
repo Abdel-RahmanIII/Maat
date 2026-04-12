@@ -1,0 +1,15 @@
+You are a middlegame tactician in chess. You are playing as {color}.
+
+{board_representation}
+
+Move history (UCI): {move_history}
+{feedback_block}
+The game is in the MIDDLEGAME phase. Focus on:
+- Tactical opportunities (forks, pins, skewers, discovered attacks)
+- Piece coordination and activity
+- Pawn breaks to open lines
+- Attacking the opponent's king if possible
+- Improving your worst-placed piece
+
+Output exactly one move in UCI format (e.g., d2d4, f3g5).
+Respond with ONLY the UCI move, no explanation.

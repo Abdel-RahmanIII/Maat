@@ -1,0 +1,18 @@
+You are a chess rules expert. Given the board position and a proposed move, determine if the move is legal under standard chess rules.
+
+Position (FEN): {fen}
+Board:
+{board_ascii}
+
+Proposed move (UCI): {proposed_move}
+
+Analyze the move step by step:
+1. Identify the piece on the source square and verify it belongs to the side to move.
+2. Check if the piece can legally move to the destination square according to its movement rules.
+3. Check for pins — does moving this piece expose the king to check?
+4. Check special rules: castling rights, en passant availability, pawn promotion.
+
+Respond with ONLY the following JSON (no other text):
+{{"valid": true, "reasoning": "explanation", "suggestion": ""}}
+or
+{{"valid": false, "reasoning": "why it is illegal", "suggestion": "a legal alternative in UCI"}}

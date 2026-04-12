@@ -4,6 +4,7 @@
 
 - Python 3.11+
 - pip
+- A Google AI Studio API key (for LLM calls)
 - Optional: Stockfish binary available in PATH or via `STOCKFISH_PATH`
 
 ## Create Environment
@@ -24,18 +25,16 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-## Dependency Sources
+## Configure API Key
 
-- `requirements.txt` is the fastest path for local setup.
-- `pyproject.toml` defines project metadata and tool configuration.
+Create a `.env` file in the project root:
 
-## Optional Engine Setup
-
-If Stockfish is not in PATH, define `STOCKFISH_PATH`:
-
-```powershell
-$env:STOCKFISH_PATH = "C:\path\to\stockfish.exe"
 ```
+GOOGLE_API_KEY=your_google_ai_studio_api_key
+STOCKFISH_PATH=C:\path\to\stockfish.exe
+```
+
+The `GOOGLE_API_KEY` is required for any condition that calls the LLM. The `STOCKFISH_PATH` is optional and only needed for full-game experiments against Stockfish.
 
 ## Verify Setup
 
@@ -43,4 +42,4 @@ $env:STOCKFISH_PATH = "C:\path\to\stockfish.exe"
 python -m pytest -q
 ```
 
-Expected baseline from current implementation: all tests pass, with one Stockfish integration test potentially skipped if engine is unavailable.
+Expected: 58 tests pass, with one Stockfish integration test potentially skipped if engine is unavailable.
