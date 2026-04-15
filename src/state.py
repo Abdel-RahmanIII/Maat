@@ -40,6 +40,8 @@ class TurnState(TypedDict):
     llm_calls_this_turn: int
     tokens_this_turn: int
     prompt_token_count: int
+    wall_clock_ms: float
+    game_phase: str
 
     # Critic-specific (Condition C)
     critic_verdict: bool | None
@@ -87,6 +89,8 @@ def create_initial_turn_state(
         "llm_calls_this_turn": 0,
         "tokens_this_turn": 0,
         "prompt_token_count": 0,
+        "wall_clock_ms": 0.0,
+        "game_phase": "",
         "critic_verdict": None,
         "ground_truth_verdict": None,
         "generation_strategy": "generator_only",

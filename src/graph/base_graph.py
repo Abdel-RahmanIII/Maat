@@ -183,6 +183,8 @@ def snapshot_turn_result(state: TurnState) -> dict[str, Any]:
 
     return {
         "move_number": state["move_number"],
+        "game_phase": state.get("game_phase", ""),
+        "wall_clock_ms": state.get("wall_clock_ms", 0.0),
         "proposed_move": state["proposed_move"],
         "is_valid": state["is_valid"],
         "first_try_valid": state["first_try_valid"],
