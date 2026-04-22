@@ -4,7 +4,7 @@
 
 Status is based on what is currently implemented in the repository.
 
-Last verified: 2026-04-10.
+Last verified: 2026-04-19.
 
 ## Phase 1 Checklist (Core Infrastructure)
 
@@ -34,18 +34,31 @@ Last verified: 2026-04-10.
 - Generation strategies (generator_only, planner_actor, router_specialists): done
 - Unit tests for agents and graphs: done
 
+## Phase 3 Checklist (Metrics)
+
+- Metrics data models (`src/metrics/definitions.py`): done
+- Real-time collector (`src/metrics/collector.py`): done
+- Aggregate metrics (`src/metrics/aggregator.py`): done
+- Recurrence metrics (`src/metrics/recurrence.py`): done
+- Metrics package exports (`src/metrics/__init__.py`): done
+- Metrics unit tests (`tests/metrics/`): done
+
+## Phase 4 Checklist (Orchestration & Config)
+
+- Experiment runners and orchestration layers (puzzle_manager, game_manager): done
+- Condition dispatcher (`condition_dispatch.py`): done
+- Result serialization store (`result_store.py`): done
+- Experiment YAML configs (`experiment_1.yaml`, `experiment_2.yaml`, `experiment_3.yaml`): done
+
 ## Current Test Health
 
-- Full suite passes: `python -m pytest -q` → `68 passed`.
+- Full suite passes: `python -m pytest -q` → `182 passed`.
 - One Stockfish integration test skips when engine binary is unavailable.
 
 ## Not Implemented Yet
 
-- Experiment runners and orchestration layers (puzzle_manager, game_manager)
-- Metrics aggregation pipeline (collector, aggregator, recurrence)
 - Analysis/reporting scripts
-- Experiment YAML configs
 
 ## Practical Next Milestone
 
-Start Phase 3 by implementing experiment orchestration (puzzle_manager for Exp 1, game_manager for Exp 2 & 3), the metrics pipeline, and YAML-based experiment configs.
+Implement analysis/reporting scripts to parse the JSONL output from the experiments.

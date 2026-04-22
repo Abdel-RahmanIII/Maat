@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
+import chess
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from src.agents.base import (
-    build_board_representation,
     format_feedback_block,
     get_side_to_move,
-    load_prompt,
+    load_agent_prompt,
 )
 from src.llm.llm_client import get_model
 from src.config import ModelConfig
@@ -24,7 +24,7 @@ def generate_move(
     feedback_history: list[str] | None = None,
     input_mode: InputMode = "fen",
     model_config: ModelConfig | None = None,
-    prompt_template: str = "generator.txt",
+    agent_id: str = "generator",
 ) -> dict[str, Any]:
     """Call the LLM to generate a chess move.
 
@@ -32,21 +32,24 @@ def generate_move(
     """
 
     color = get_side_to_move(fen)
-    board_repr = build_board_representation(fen, input_mode, move_history)
+    board = chess.Board(fen)
+    ascii_board = str(board)
     feedback_block = format_feedback_block(feedback_history or [])
     history_str = " ".join(move_history) if move_history else "(none)"
 
-    template = load_prompt(prompt_template)
-    prompt_text = template.format(
+    system_text = load_agent_prompt(agent_id, input_mode, "system")
+    user_template = load_agent_prompt(agent_id, input_mode, "user")
+    prompt_text = user_template.format(
         color=color,
-        board_representation=board_repr,
+        fen=fen,
+        ascii_board=ascii_board,
         move_history=history_str,
         feedback_block=feedback_block,
     )
 
     model = get_model(model_config)
     messages = [
-        SystemMessage(content="You are a chess-playing assistant."),
+        SystemMessage(content=system_text),
         HumanMessage(content=prompt_text),
     ]
 

@@ -2,6 +2,8 @@
 
 This index reflects the current workspace files (excluding `.git/` internals and local caches).
 
+Last verified: 2026-04-22.
+
 ## Root
 
 - `.env`
@@ -46,15 +48,16 @@ This index reflects the current workspace files (excluding `.git/` internals and
 
 ### Prompts (`src/prompts/`)
 
-- `src/prompts/generator.txt`
-- `src/prompts/critic.txt`
-- `src/prompts/explainer.txt`
-- `src/prompts/react.txt`
-- `src/prompts/strategist.txt`
-- `src/prompts/router.txt`
-- `src/prompts/opening_specialist.txt`
-- `src/prompts/middlegame_specialist.txt`
-- `src/prompts/endgame_specialist.txt`
+- `src/prompts/generator.yaml`
+- `src/prompts/critic.yaml`
+- `src/prompts/explainer.yaml`
+- `src/prompts/react.yaml`
+- `src/prompts/strategist.yaml`
+- `src/prompts/router.yaml`
+- `src/prompts/tactician.yaml`
+- `src/prompts/opening_specialist.yaml`
+- `src/prompts/middlegame_specialist.yaml`
+- `src/prompts/endgame_specialist.yaml`
 
 ### Graphs (`src/graph/`)
 
@@ -86,7 +89,20 @@ This index reflects the current workspace files (excluding `.git/` internals and
 ### Engine (`src/engine/`)
 
 - `src/engine/__init__.py`
+- `src/engine/config_loader.py`
+- `src/engine/condition_dispatch.py`
+- `src/engine/game_manager.py`
+- `src/engine/puzzle_manager.py`
+- `src/engine/result_store.py`
 - `src/engine/stockfish_wrapper.py`
+
+### Metrics (`src/metrics/`)
+
+- `src/metrics/__init__.py`
+- `src/metrics/definitions.py`
+- `src/metrics/collector.py`
+- `src/metrics/aggregator.py`
+- `src/metrics/recurrence.py`
 
 ## Tests (`tests/`)
 
@@ -97,6 +113,11 @@ This index reflects the current workspace files (excluding `.git/` internals and
 - `tests/engine/test_stockfish_wrapper.py`
 - `tests/graph/__init__.py`
 - `tests/graph/test_conditions.py`
+- `tests/metrics/__init__.py`
+- `tests/metrics/test_definitions.py`
+- `tests/metrics/test_collector.py`
+- `tests/metrics/test_aggregator.py`
+- `tests/metrics/test_recurrence.py`
 - `tests/state/test_state.py`
 - `tests/tools/test_chess_tools.py`
 - `tests/validators/test_move_parser.py`
@@ -111,6 +132,7 @@ This index reflects the current workspace files (excluding `.git/` internals and
 - `docs/architecture/system-overview.md`
 - `docs/architecture/state-and-errors.md`
 - `docs/architecture/condition-graphs.md`
+- `docs/architecture/graph-implementation.md`
 - `docs/modules/validators.md`
 - `docs/modules/tools.md`
 - `docs/modules/data.md`
@@ -118,6 +140,7 @@ This index reflects the current workspace files (excluding `.git/` internals and
 - `docs/modules/llm-client.md`
 - `docs/modules/agents.md`
 - `docs/modules/graphs.md`
+- `docs/modules/metrics.md`
 - `docs/modules/config.md`
 - `docs/modules/prompts.md`
 - `docs/testing/testing-guide.md`
@@ -126,3 +149,4 @@ This index reflects the current workspace files (excluding `.git/` internals and
 - `docs/reference/file-index.md`
 - `docs/reference/implementation_plan.md`
 - `docs/status/implementation-status.md`
+- `docs/status/docs-scripts-implementation-summary.md`

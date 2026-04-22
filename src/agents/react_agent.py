@@ -6,12 +6,12 @@ import re
 from collections.abc import Sequence
 from typing import Any
 
+import chess
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
 from src.agents.base import (
-    build_board_representation,
     get_side_to_move,
-    load_prompt,
+    load_agent_prompt,
 )
 from src.config import ModelConfig
 from src.llm.llm_client import get_model_with_tools
@@ -73,27 +73,28 @@ def run_react_loop(
     """
 
     color = get_side_to_move(fen)
-    board_repr = build_board_representation(fen, input_mode, move_history)
+    board = chess.Board(fen)
+    ascii_board = str(board)
     history_str = " ".join(move_history) if move_history else "(none)"
 
-    template = load_prompt("react.txt")
-    system_prompt = template.format(
+    system_template = load_agent_prompt("react", input_mode, "system")
+    user_template = load_agent_prompt("react", input_mode, "user")
+    system_prompt = system_template.format(
         color=color,
-        board_representation=board_repr,
+        fen=fen,
+        ascii_board=ascii_board,
+        move_history=history_str,
+    )
+    turn_prompt = user_template.format(
+        color=color,
+        fen=fen,
+        ascii_board=ascii_board,
         move_history=history_str,
     )
 
     selected_tools = get_tools_for_input_mode(input_mode)
     tool_map: dict[str, Any] = {tool.name: tool for tool in selected_tools}
     model = get_model_with_tools(selected_tools, model_config)
-
-    if input_mode == "fen":
-        turn_prompt = f"It is your turn as {color}. The current FEN is: {fen}"
-    else:
-        turn_prompt = (
-            f"It is your turn as {color}. FEN is withheld in history mode; "
-            "reason from move history and tool outputs."
-        )
 
     messages: list[Any] = [
         SystemMessage(content=system_prompt),
@@ -165,7 +166,7 @@ def run_react_loop(
 def _extract_submit_from_text(text: str) -> str:
     """Fallback: try to find a move the agent mentioned but forgot to tool-call."""
 
-    match = re.search(r"SUBMIT:([a-h][1-8][a-h][1-8][qrbn]?)", text)
+    match = re.search(r"(?:SUBMIT:|MOVE:\s*)([a-h][1-8][a-h][1-8][qrbn]?)", text)
     if match:
         return match.group(1)
     return ""

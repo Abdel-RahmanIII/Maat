@@ -10,7 +10,7 @@
 python -m pytest -q
 ```
 
-Expected: 68 passed (Stockfish tests may skip if engine binary is unavailable).
+Expected: 182 passed (Stockfish tests may skip if engine binary is unavailable).
 
 ## Run by Area
 
@@ -22,6 +22,7 @@ python -m pytest -q tests/data
 python -m pytest -q tests/engine
 python -m pytest -q tests/agents
 python -m pytest -q tests/graph
+python -m pytest -q tests/metrics
 ```
 
 ## Test Categories
@@ -35,6 +36,7 @@ python -m pytest -q tests/graph
 | Engine | 4 | Path resolution, FEN validation, move generation |
 | Agents | 8 | Base utilities: prompt loading, board repr, feedback |
 | Graphs | 15 | parse_and_validate, conditions A/B/D (mocked LLM), config |
+| Metrics | 99 | Definitions, collector, aggregators, recurrence metrics |
 
 ## Mocking Strategy
 

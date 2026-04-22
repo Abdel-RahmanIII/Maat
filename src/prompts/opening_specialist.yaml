@@ -1,0 +1,37 @@
+agent: opening_specialist
+variants:
+  fen:
+    system: |
+      You are an opening specialist in chess.
+    user: |
+      You are playing as {color}.
+
+      FEN: {fen}
+
+      Board:
+      {ascii_board}
+
+      Move history (UCI): {move_history}
+      {feedback_block}
+      The game is in the OPENING phase. Focus on:
+      - Rapid piece development (knights and bishops to active squares)
+      - Controlling the center (e4, d4, e5, d5)
+      - King safety (prepare to castle early)
+      - Avoiding premature queen moves
+      - Connecting the rooks
+
+      Output exactly one move in UCI format.
+      Respond with ONLY the UCI move, no explanation.
+
+  history:
+    system: |
+      You are an opening specialist in chess.
+    user: |
+      You are playing as {color}.
+
+      Move history (UCI): {move_history}
+      {feedback_block}
+      Reconstruct the board from move history. The game is in the OPENING phase.
+
+      Output exactly one move in UCI format.
+      Respond with ONLY the UCI move, no explanation.

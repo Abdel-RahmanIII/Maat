@@ -1,0 +1,41 @@
+# Experiment 2 — Full Games with Board State (FEN)
+# 50 games × 3 conditions = 150 games
+
+experiment: 2
+# Conditions A, B are always included.
+# The third condition is the best-performing from Exp 1 — update after analysis.
+conditions: ["A", "B"]
+# conditions: ["A", "B", "D"]  # example: uncomment after Exp 1 analysis
+
+input_mode: "fen"
+
+# 50 fixed starting positions (shared with Exp 3 for pairing)
+starting_positions: "configs/starting_positions.txt"
+
+# Game parameters
+max_half_moves: 150
+
+# Output directory
+output_dir: "results/exp2"
+
+# Rate limiting
+delay_seconds: 0.5
+
+# Exponential backoff for API errors
+max_api_retries: 5
+backoff_base: 2.0
+backoff_max: 60.0
+
+# Stockfish opponent
+stockfish:
+  elo: 1000
+  path: null  # auto-detect from PATH or STOCKFISH_PATH env var
+
+# Generation strategy
+generation_strategy: "generator_only"
+
+# Model configuration
+model:
+  model_name: "gemma-4-31b-it"
+  temperature: 0.0
+  max_output_tokens: 1024

@@ -25,10 +25,18 @@ Maat is a Python codebase for research experiments on chess-playing LLM architec
 - 6 condition graphs implementing all experimental conditions A–F (`src/graph/`)
 - 3 swappable generation strategies: generator_only, planner_actor, router_specialists
 
+### Phase 3 — Metrics
+
+- Metrics schema models (`src/metrics/definitions.py`)
+- Real-time turn/game collection (`src/metrics/collector.py`)
+- Experiment-level metric aggregation (`src/metrics/aggregator.py`)
+- Multi-turn recurrence metrics (`src/metrics/recurrence.py`)
+- Metrics package exports (`src/metrics/__init__.py`)
+- Metrics test suite (`tests/metrics/`)
+
 ## What Is Not Implemented Yet
 
 - Experiment runners and orchestration (puzzle_manager, game_manager)
-- Metrics aggregation pipeline
 - Analysis scripts and reporting pipeline
 - Experiment YAML configs
 

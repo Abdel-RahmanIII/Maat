@@ -4,7 +4,7 @@
 
 - State contract layer (`src/state.py`)
 - Error taxonomy layer (`src/error_taxonomy.py`)
-- Configuration layer (`src/config.py`)
+- Configuration layer (`src/config.py`, `src/engine/config_loader.py`)
 - LLM client layer (`src/llm/llm_client.py`)
 - Agent layer (`src/agents/*`)
 - Prompt template layer (`src/prompts/*`)
@@ -13,11 +13,19 @@
 - Tooling layer (`src/tools/chess_tools.py`)
 - Data preparation layer (`scripts/puzzle_sampler.py`, re-exported by `src/data/__init__.py`)
 - Engine interface layer (`src/engine/stockfish_wrapper.py`)
+- Orchestration layer (`src/engine/puzzle_manager.py`, `src/engine/game_manager.py`, `src/engine/condition_dispatch.py`, `src/engine/result_store.py`)
+- Metrics layer (`src/metrics/*`)
 
 ## High-Level Architecture
 
 ```mermaid
 flowchart TB
+  subgraph "Orchestration Layer"
+    PM["PuzzleManager\n(Exp 1)"]
+    GM["GameManager\n(Exp 2 & 3)"]
+    CONF["config_loader.py"]
+  end
+
   subgraph "Condition Dispatch"
     CD{Condition Selector}
     CA["Condition A\n(direct call)"]
@@ -40,8 +48,13 @@ flowchart TB
     VAL["python-chess\nValidator"]
     PARSE["UCI Move Parser"]
     TOOLS["Chess Analysis\nTools"]
+    METRICS["Metrics Collector +\nAggregators"]
+    STOCKFISH["StockfishWrapper"]
   end
 
+  CONF --> PM & GM
+  PM & GM --> CD
+  GM <--> STOCKFISH
   CD --> CA & CB & CC & CD2 & CE & CF
   CA & CB & CC & CD2 & CE --> GS
   GS --> GO & PA & RS
@@ -50,6 +63,7 @@ flowchart TB
   CF --> TOOLS
   CA & CB & CC & CD2 & CE & CF --> VAL
   CA & CB & CC & CD2 & CE & CF --> PARSE
+  CA & CB & CC & CD2 & CE & CF --> METRICS
 ```
 
 ## Data Flow
@@ -77,6 +91,5 @@ flowchart LR
 
 ## Implementation Boundaries
 
-- Phases 1 and 2 are complete: core infrastructure and all 6 condition graphs.
-- Experiment runners and orchestration layers are not implemented yet.
-- Analysis and metrics pipelines are not implemented yet.
+- Phases 1, 2, 3, and 4 are complete: core infrastructure, all 6 condition graphs, metrics package, and orchestration (managers and configs).
+- Analysis/reporting pipelines are not implemented yet.

@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from typing import Literal, TypedDict
 
+import chess
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from src.agents.base import (
-    build_board_representation,
-    load_prompt,
+    load_agent_prompt,
 )
 from src.llm.llm_client import get_model
 from src.config import ModelConfig
@@ -38,18 +38,21 @@ def classify_phase(
     Falls back to ``'middlegame'`` if the response is unparseable.
     """
 
-    board_repr = build_board_representation(fen, input_mode, move_history)
+    board = chess.Board(fen)
+    ascii_board = str(board)
     history_str = " ".join(move_history) if move_history else "(none)"
 
-    template = load_prompt("router.txt")
-    prompt_text = template.format(
-        board_representation=board_repr,
+    system_text = load_agent_prompt("router", input_mode, "system")
+    user_template = load_agent_prompt("router", input_mode, "user")
+    prompt_text = user_template.format(
+        fen=fen,
+        ascii_board=ascii_board,
         move_history=history_str,
     )
 
     model = get_model(model_config)
     messages = [
-        SystemMessage(content="You are a chess game-phase classifier."),
+        SystemMessage(content=system_text),
         HumanMessage(content=prompt_text),
     ]
 

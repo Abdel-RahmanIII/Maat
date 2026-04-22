@@ -9,19 +9,19 @@ from src.agents.base import (
     build_board_representation,
     format_feedback_block,
     get_side_to_move,
-    load_prompt,
+    load_agent_prompt,
 )
 
 
-def test_load_prompt_loads_existing_template() -> None:
-    text = load_prompt("generator.txt")
+def test_load_agent_prompt_loads_existing_template() -> None:
+    text = load_agent_prompt("generator", "fen", "user")
     assert "{color}" in text
     assert "UCI" in text
 
 
-def test_load_prompt_raises_on_missing_template() -> None:
+def test_load_agent_prompt_raises_on_missing_template() -> None:
     with pytest.raises(FileNotFoundError):
-        load_prompt("nonexistent_template.txt")
+        load_agent_prompt("nonexistent_agent", "fen", "user")
 
 
 def test_build_board_representation_fen_mode() -> None:

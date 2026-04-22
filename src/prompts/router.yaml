@@ -1,0 +1,26 @@
+agent: router
+variants:
+  fen:
+    system: |
+      You are a chess game-phase classifier.
+    user: |
+      Classify the current game phase based on the position.
+
+      FEN: {fen}
+
+      Board:
+      {ascii_board}
+
+      Move history (UCI): {move_history}
+
+      Respond with exactly one word: opening, middlegame, or endgame.
+
+  history:
+    system: |
+      You are a chess game-phase classifier.
+    user: |
+      Classify the current game phase based on move history only.
+
+      Move history (UCI): {move_history}
+
+      Respond with exactly one word: opening, middlegame, or endgame.

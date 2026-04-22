@@ -1,6 +1,6 @@
 # Maat Implementation Summary (Source-Verified)
 
-Last analyzed: 2026-04-10
+Last analyzed: 2026-04-18
 Analysis scope: docs/, scripts/, src/, tests/ (implementation-first pass)
 
 ## 1. Executive Snapshot
@@ -9,15 +9,15 @@ This summary was updated by reading the actual implementation files, not only th
 
 Codebase snapshot (current tree):
 
-- 33 Python source files in src/
-- 11 Python test files in tests/
+- 38 Python source files in src/
+- 16 Python test files in tests/
 - 9 prompt templates in src/prompts/
 - 6 condition graph modules (condition_a.py to condition_f.py)
 - 10 agent modules in src/agents/
 
 Runtime/test status validated on this workspace:
 
-- python -m pytest -q -> 68 passed
+- python -m pytest -q -> 182 passed
 
 Current high-level state:
 
@@ -25,7 +25,7 @@ Current high-level state:
 - Condition A-F turn-level logic is implemented.
 - Planner-Actor and Router-Specialists generation strategies are wired into shared generation dispatch.
 - Local prompt engineering and smoke-testing utilities are implemented in scripts/.
-- Experiment-scale orchestration, metrics aggregation, and analysis/reporting modules are still absent from src/.
+- Experiment-scale orchestration and analysis/reporting modules are still absent from src/.
 
 ## 2. Implemented System (From Actual Source Files)
 
@@ -154,6 +154,7 @@ Shared utilities (base_graph.py):
 - planner_actor and router_specialists each add one extra LLM call per attempt via extra_llm_calls=1.
 - parse_and_validate() runs parser then symbolic validator and returns normalized fields for graph nodes.
 - snapshot_turn_result() serializes per-turn metrics and strategy metadata into turn_results.
+- snapshot_turn_result() includes wall_clock_ms, game_phase, and board_fen for downstream metric analysis.
 
 Condition A (condition_a.py):
 
@@ -192,6 +193,27 @@ Condition F (condition_f.py):
 - If submitted move exists, parse_and_validate() performs final ground-truth legality check.
 - tool_calls from ReAct are persisted into TurnState.tool_calls and snapshot_turn_result.
 
+### 2.10 Metrics package details
+
+Actual implementation in src/metrics/:
+
+- definitions.py:
+  Pydantic v2 models for TurnRecord, GameRecord, ConditionMetrics, and helper containers
+  (PhaseStratifiedFIR, CriticAccuracy, ErrorTypeRSR, ToolCallDistribution,
+  DescriptiveStats, LegalityDegradationBin, QuartileErrorDist, FSTEntry, FIRDeltaEntry).
+- collector.py:
+  MetricsCollector lifecycle (start_turn, end_turn, finalize_game) and infer_game_phase()
+  with opening/middlegame/endgame rules using move number and non-pawn material.
+- aggregator.py:
+  pure aggregate functions for Exp 1 and Exp 2/3 including FIR, FTIR, MFIR, ARR,
+  RSR, MRTC, LCPT, TPT, CAFIR, critic accuracy, tool metrics, IMFR, FST,
+  and condition-aware dispatch via compute_all_exp1_metrics/compute_all_game_metrics.
+- recurrence.py:
+  multi-turn consistency metrics (SERR, PCRR, TTR, ECC), legality degradation,
+  input-length/error extraction, and quartile error distributions.
+- __init__.py:
+  explicit public exports for collector and model classes.
+
 ### 2.10 Prompt implementation details
 
 Actual templates in src/prompts/:
@@ -210,7 +232,7 @@ Actual templates in src/prompts/:
 Live run in this workspace:
 
 - Command: python -m pytest -q
-- Result: 68 passed
+- Result: 182 passed
 
 ### 3.2 What is concretely tested
 
@@ -267,6 +289,13 @@ Agent base tests (tests/agents/test_base.py):
 - board representation mode behavior
 - feedback block formatting
 - side-to-move utility behavior
+
+Metrics tests (tests/metrics/):
+
+- Pydantic model validation and JSON round-trip behavior (definitions)
+- Collector lifecycle, wall-clock timing, and game-phase inference (collector)
+- Aggregate metric formulas and edge cases across Exp 1 and Exp 2/3 (aggregator)
+- Recurrence/clustering metrics and quartile/bin outputs (recurrence)
 
 ### 3.3 Current test coverage boundaries
 
@@ -349,7 +378,6 @@ Operational details:
 The following implementation areas are still missing in src/ and root structure:
 
 - No experiment orchestration package (e.g., puzzle_manager/game_manager runtime modules).
-- No metrics package (collector/aggregator/recurrence modules do not exist in src/).
 - No analysis package or result-report generation scripts in repository root.
 - No experiment YAML config directory or run-config files.
 - No results/ output structure for persisted experiment runs in tracked tree.
@@ -357,14 +385,14 @@ The following implementation areas are still missing in src/ and root structure:
 What this means in practice:
 
 - Turn-level logic and condition execution are implemented.
-- End-to-end research campaign automation is not yet implemented.
+- End-to-end research campaign automation is partially implemented (metrics are complete; orchestration/analysis remain pending).
 
 ## 6. Consistency Notes Found During Source Analysis
 
 ### 6.1 Model naming drift in docs vs code
 
 - Current code default is gemma-4-31b-it (src/config.py).
-- Some planning/reference docs still mention Gemma 4 27B.
+- Some planning/reference docs still mention Gemma 4 31B.
 
 ### 6.2 Packaging metadata path drift
 
@@ -381,7 +409,7 @@ What this means in practice:
 ### 6.4 Skip behavior is environment-dependent
 
 - docs mention potential Stockfish skip condition.
-- In this environment, full suite ran with 68 passed.
+- In this environment, full suite ran with 182 passed.
 
 ## 7. Practical Readiness Assessment
 

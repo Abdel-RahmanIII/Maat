@@ -10,7 +10,7 @@ from src.agents.tactician import execute_plan
 from src.agents.router import classify_phase
 from src.agents.specialists import generate_specialist_move
 from src.config import GenerationStrategy, ModelConfig
-from src.state import TurnState
+from src.state import InputMode, TurnState
 from src.validators.move_parser import parse_uci_move
 from src.validators.symbolic import validate_move
 
@@ -75,7 +75,7 @@ def _run_planner_actor(
     fen: str,
     move_history: list[str],
     feedback_history: list[str],
-    input_mode: str,
+    input_mode: InputMode,
     model_config: ModelConfig | None,
 ) -> dict[str, Any]:
     """Planner (strategist) → Actor (tactician) pipeline."""
@@ -111,7 +111,7 @@ def _run_router_specialists(
     fen: str,
     move_history: list[str],
     feedback_history: list[str],
-    input_mode: str,
+    input_mode: InputMode,
     model_config: ModelConfig | None,
 ) -> dict[str, Any]:
     """Router → Phase-specific specialist pipeline."""
@@ -199,4 +199,7 @@ def snapshot_turn_result(state: TurnState) -> dict[str, Any]:
         "strategic_plan": state.get("strategic_plan", ""),
         "routed_phase": state.get("routed_phase", ""),
         "feedback_history": list(state["feedback_history"]),
+        "wall_clock_ms": state.get("wall_clock_ms", 0.0),
+        "game_phase": state.get("game_phase", ""),
+        "board_fen": state["board_fen"],
     }

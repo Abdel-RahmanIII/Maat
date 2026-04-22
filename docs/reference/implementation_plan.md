@@ -8,15 +8,15 @@ This project investigates whether explicit architectural structure — role sepa
 
 | ID | Question | Primary Metrics | Experiments |
 |----|----------|-----------------|-------------|
-| **RQ1** | Can explicit role separation reduce rule violations? | FIR, MFIR, Phase-Stratified FIR, GCR, MBF | Exp 1 (all conditions), Exp 2 & 3 (selected conditions) |
-| **RQ2** | Does structured validation improve multi-turn consistency? Does embedding full board state (FEN) vs. move-history-only affect error recurrence? | SERR, PCRR, Legality Degradation Curve, FIR Cross-Experiment Δ, ECC, Input Length vs Error, Error-Type over Quartiles, FTIR-over-time | Exp 2 vs Exp 3 |
-| **RQ3** | How should rule enforcement be embedded inside an agentic workflow? | FIR, RSR, MRTC, LCPT, TPT, MRPT, Latency Per Turn, CAFIR, Critic Confusion Matrix, Error-Type × Condition RSR | Exp 1 (all conditions) |
+| **RQ1** | Can explicit role separation reduce rule violations? | FIR, MFIR, ARR, Phase-Stratified FIR, IMFR, FST | Exp 1 (all conditions), Exp 2 & 3 (selected conditions) |
+| **RQ2** | Does structured validation improve multi-turn consistency? Does embedding full board state (FEN) vs. move-history-only affect error recurrence? | SERR, PCRR, TTR, Legality Degradation Curve, FIR Cross-Experiment Δ, ECC, Input Length vs Error, Error-Type over Quartiles | Exp 2 vs Exp 3 |
+| **RQ3** | How should rule enforcement be embedded inside an agentic workflow? | FIR, RSR, MRTC, LCPT, TPT, CAFIR, Critic Accuracy, Error-Type × Condition RSR | Exp 1 (all conditions) |
 
 ### Fixed Variables
 
 | Variable | Value |
 |----------|-------|
-| LLM | Gemma 4 27B via Google AI Studio API |
+| LLM | Gemma 4 31B via Google AI Studio API |
 | Framework | LangGraph (Python) |
 | Rule Engine | `python-chess` |
 | Move Format | UCI (e.g. `e2e4`, `e7e8q`) |
@@ -95,7 +95,7 @@ Always available (all experiments):
 |------|-----------|-------------|
 | `validate_move` | `(fen, move_uci) → {legal, reason, rule_ref}` | Only rule-enforcement tool |
 | `is_in_check` | `(fen) → {in_check, checking_squares}` | Check status without board reveal |
-| `get_game_phase` | `(move_history) → opening|middlegame|endgame` | Phase inference from ply count |
+| `get_game_phase` | `(move_history) → {opening/middlegame/endgame}` | Phase inference from ply count |
 | `get_move_history_pgn` | `(move_history) → str` | Converts UCI history to PGN text |
 
 Additional tools for Experiments 1 and 2 only (`fen` mode):
@@ -147,7 +147,7 @@ graph TB
     end
 
     subgraph "Shared Infrastructure"
-        LLM["Gemma 4 27B<br/>(Google AI Studio)"]
+        LLM["Gemma 4 31B<br/>(Google AI Studio)"]
         VAL["python-chess<br/>Validator"]
         MC[Metrics<br/>Collector]
         LOG[Structured<br/>Logger]
@@ -347,7 +347,7 @@ graph LR
 - **Specialists**: Each has a phase-specific system prompt emphasizing relevant principles.
 
 > [!WARNING]
-> Extensions double or triple LLM calls per turn. Budget API costs carefully. With Gemma 4 27B on AI Studio, check rate limits and quotas before committing to extensions.
+> Extensions double or triple LLM calls per turn. Budget API costs carefully. With Gemma 4 31B on AI Studio, check rate limits and quotas before committing to extensions.
 
 ---
 
@@ -412,178 +412,11 @@ graph LR
 
 ---
 
-## 5. Evaluation Metrics
+## 5. Evaluation Framework
 
-### 5.1 RQ1 Metrics — Role Separation → Rule Violations
+### 5.1 Error Taxonomy
 
-These metrics measure whether adding distinct agent roles reduces rule violations. The primary comparison axis is **FIR across conditions**, not FTIR (see note below).
-
-| Metric | Definition | Formula | Role | Experiments |
-|--------|------------|---------|------|-------------|
-| **Final Invalid Rate (FIR)** | Fraction of turns that ended in forfeit (illegal after all retries) | `forfeits / total_turns` | Primary | Exp 1, 2, 3 |
-| **Marginal FIR Reduction (MFIR)** | Percentage reduction in FIR when adding a role | `(FIR_X - FIR_Y) / FIR_X` for paired conditions X→Y | Primary | Exp 1 |
-| **Phase-Stratified FIR** | FIR split by Opening / Middlegame / Endgame buckets | FIR computed within each phase stratum | Primary | Exp 1 |
-| **Game Completion Rate (GCR)** | Fraction of games reaching natural termination | `non_forfeit_games / total_games` | Secondary | Exp 2, 3 |
-| **Moves Before Forfeit (MBF)** | Median number of legal moves played before the first forfeit | — | Secondary | Exp 2, 3 |
-| **Game Length** | Number of full moves before termination (median + IQR) | — | Supplementary | Exp 2, 3 |
-
-MFIR is computed for each chained pair to show the marginal value of each role:
-
-| Pair | What It Isolates |
-|------|------------------|
-| A → B | Framework overhead (should be ≈ 0) |
-| B → C | Adding a Critic role |
-| B → D | Adding a Symbolic Validator role |
-| D → E | Adding an Explainer role on top of Validator |
-| B → F | Adding autonomous tool access |
-
-> [!NOTE]
-> **Why FTIR is not an RQ1 metric**: In Experiment 1 (isolated positions), the Generator uses the same LLM and prompt across conditions B–E. FTIR measures the generator's first attempt *before* any validation occurs, so it will be nearly identical across B–E. The role-separation effect only manifests in FIR (after the retry loop). FTIR is reassigned to RQ2, where it captures multi-turn behavioral change.
-
-### 5.2 RQ2 Metrics — Multi-Turn Consistency
-
-These metrics measure whether the system maintains legality over the course of a full game, and whether board representation (FEN vs. history-only) affects error patterns. Computed in **Experiments 2 & 3** only.
-
-| Metric | Definition | Role | Comparison |
-|--------|------------|------|------------|
-| **Same-Error Recurrence Rate (SERR)** | Within a single game, the fraction of error types that occur more than once | Primary | Cross-condition (RQ2a) + Exp 2 vs 3 (RQ2b) |
-| **Post-Correction Recurrence Rate (PCRR)** | After an error is corrected via retry, how often the same error type recurs in subsequent turns | Primary | Cross-condition + Exp 2 vs 3 |
-| **Legality Degradation Curve** | FTIR plotted as a function of move number (binned in 10-move windows) | Primary | Cross-condition + Exp 2 vs 3 |
-| **FIR Cross-Experiment Δ** | Paired comparison of FIR between Exp 2 and Exp 3 per condition, matched by starting position | Primary | Exp 2 vs 3 (RQ2b) |
-| **Error Clustering Coefficient (ECC)** | Ratio of observed consecutive-turn error pairs to expected pairs under a Bernoulli null model with the same overall error rate | Secondary | Cross-condition + Exp 2 vs 3 |
-| **Input Length vs. Error Correlation** | Spearman's ρ between prompt token count and error occurrence per turn | Secondary | Exp 2 vs 3 (RQ2b) |
-| **Error-Type Distribution over Turn Quartiles** | Frequency of each error taxonomy class (§5.5) broken down by turn quartile (Q1–Q4) | Secondary | Cross-condition + Exp 2 vs 3 |
-| **FTIR (aggregate, per-game)** | First-try invalid rate computed per game, analyzed as a time-series | Supporting | Cross-condition |
-
-> [!NOTE]
-> **PCRR applicability**: PCRR is only computable for conditions with a retry mechanism (C, D, E). For conditions A and B (which forfeit on first illegal move), PCRR is undefined and should be reported as N/A. If Condition F's ReAct self-correction is treated as analogous to retry, PCRR may also be computed for F.
-
-**ECC operationalization**:
-```
-ECC = (observed pairs of errors in consecutive turns) / (expected pairs under Bernoulli model)
-
-Expected = (total_turns - 1) × FTIR²
-```
-- ECC > 1 → errors cluster (one error makes the next more likely)
-- ECC ≈ 1 → errors are independent
-- ECC < 1 → errors anti-cluster (correction effect — error makes next turn *less* likely to error)
-
-**Input Length vs. Error Correlation** rationale: In Exp 3 (history-only), the prompt grows every turn. A strong positive Spearman's ρ in Exp 3 but not Exp 2 (fixed-size FEN) would indicate that context-window degradation — not game complexity — drives multi-turn inconsistency.
-
-**Error-Type Distribution over Turn Quartiles** rationale: The Legality Degradation Curve shows aggregate error trends over time, but does not reveal *which* error types drive degradation. This metric breaks down the error taxonomy (§5.5) by game progress quartile (Q1: turns 1–25%, Q2: 25–50%, Q3: 50–75%, Q4: 75–100%), revealing whether degradation is uniform or concentrated in specific error types (e.g., castling violations may cluster early, while spatial errors grow late).
-
-> [!NOTE]
-> **RQ2a scope limitation**: Experiments 2 & 3 run only A, B, and the best condition from Exp 1. This means RQ2a answers *"Does any structured validation improve multi-turn consistency?"* rather than comparing all strategies. This is acknowledged as a scope limitation.
-
-### 5.3 RQ3 Metrics — Enforcement Strategy Comparison
-
-These metrics compare **how** rules should be enforced: LLM Critic (C) vs. Symbolic (D) vs. Symbolic+Explainer (E) vs. ReAct+Tools (F). Computed primarily in **Experiment 1** (all conditions tested).
-
-#### 5.3.1 Effectiveness Metrics
-
-| Metric | Definition | Formula | Conditions |
-|--------|------------|---------|------------|
-| **FIR** | Final Invalid Rate (shared with RQ1) | `forfeits / total_turns` | All |
-| **Retry Success Rate (RSR)** | Of initially-invalid moves, fraction corrected within N retries | `corrected / initially_invalid` | C, D, E |
-| **Mean Retries to Correct (MRTC)** | Average retries needed when correction succeeds | `sum(retries for corrected) / count(corrected)` | C, D, E |
-
-#### 5.3.2 Cost & Efficiency Metrics
-
-| Metric | Definition | Formula | Conditions |
-|--------|------------|---------|------------|
-| **LLM Calls Per Turn (LCPT)** | Average LLM API calls per turn | `total_llm_calls / total_turns` | All |
-| **Tokens Per Turn (TPT)** | Average total tokens (input + output) per turn | `total_tokens / total_turns` | All |
-| **Mean Retries Per Turn (MRPT)** | Average retries diluted across all turns (not just invalid ones) | `total_retries / total_turns` | C, D, E |
-| **Latency Per Turn** | Wall-clock time per turn decision (median + p95) | — | All |
-| **Cost-Adjusted FIR (CAFIR)** | FIR normalized by cost; lower is better | `FIR × LCPT` | C, D, E, F |
-
-> [!NOTE]
-> CAFIR uses multiplication (`FIR × LCPT`) so that a perfect system (FIR=0) scores 0 regardless of cost, and higher cost only matters when errors persist. This yields a single number where lower = better cost-effectiveness.
-
-Expected LCPT by condition:
-
-| Condition | Min LCPT | Max LCPT | Notes |
-|-----------|----------|----------|-------|
-| A | 1 | 1 | Single call, no retries |
-| B | 1 | 1 | Single call, no retries |
-| C | 2 | 2 + 2N | Generator + Critic per attempt |
-| D | 1 | 1 + N | Generator only; validator is symbolic (free) |
-| E | 1 | 1 + 2N | Generator + Explainer per failed attempt |
-| F | 1 | M | 1 to M reasoning steps, each may call LLM |
-
-#### 5.3.3 Critic Accuracy Metrics (Condition C Only)
-
-Since Condition C uses an LLM as the validator, its accuracy against ground truth reveals why the strategy performs as it does.
-
-| Metric | Definition |
-|--------|------------|
-| **Critic True Positive Rate (TPR)** | P(Critic says invalid ∣ move is actually invalid) |
-| **Critic False Positive Rate (FPR)** | P(Critic says invalid ∣ move is actually valid) |
-| **Critic True Negative Rate (TNR)** | P(Critic says valid ∣ move is actually valid) |
-| **Critic False Negative Rate (FNR)** | P(Critic says valid ∣ move is actually invalid) |
-
-> [!IMPORTANT]
-> The Critic FNR is particularly critical: it measures how often the Critic *approves* an illegal move, which then gets accepted (since the ground-truth check after Critic approval causes a forfeit, not a retry). A high FNR means the Critic is a liability.
-
-#### 5.3.4 Error-Type × Condition Recovery Matrix
-
-For each error type in the taxonomy (§5.5), compute RSR per condition. Present as a heatmap:
-
-| Error Type | RSR (C) | RSR (D) | RSR (E) |
-|------------|---------|---------|----------|
-| `INVALID_PIECE` | — | — | — |
-| `ILLEGAL_DESTINATION` | — | — | — |
-| `LEAVES_IN_CHECK` | — | — | — |
-| ... | ... | ... | ... |
-
-This reveals which enforcement strategy excels at which error types. For example, the LLM Critic may catch spatial reasoning errors but miss state-tracking errors (castling rights).
-
-#### 5.3.5 Condition F–Specific Metrics (ReAct + Tools)
-
-| Metric | Definition |
-|--------|------------|
-| **Tool Call Rate (TCR)** | Fraction of turns where at least one tool was called |
-| **Tool-Call Distribution** | Frequency breakdown per tool type (reveals which tools the agent relies on vs. ignores) |
-| **Validation Tool Adoption (VTA)** | Fraction of turns where `validate_move` was called before submission |
-| **Tool-Stratified FIR** | FIR split by whether tools were used (to measure tool effectiveness) |
-| **Avg. Reasoning Steps** | Mean number of think/act cycles per turn |
-
-### 5.4 Complete RQ → Metric → Experiment Mapping
-
-| Metric | RQ1 | RQ2 | RQ3 | Exp 1 | Exp 2 | Exp 3 |
-|--------|-----|-----|-----|-------|-------|-------|
-| FIR | ✅ Primary | | ✅ Primary | ✅ | ✅ | ✅ |
-| MFIR | ✅ Primary | | | ✅ | | |
-| Phase-Stratified FIR | ✅ Primary | | | ✅ | | |
-| GCR | ✅ Secondary | | | | ✅ | ✅ |
-| MBF | ✅ Secondary | | | | ✅ | ✅ |
-| Game Length | ✅ Supplementary | | | | ✅ | ✅ |
-| SERR | | ✅ Primary | | | ✅ | ✅ |
-| PCRR | | ✅ Primary | | | ✅ | ✅ |
-| Legality Degradation | | ✅ Primary | | | ✅ | ✅ |
-| FIR Cross-Experiment Δ | | ✅ Primary | | | ✅ | ✅ |
-| ECC | | ✅ Secondary | | | ✅ | ✅ |
-| Input Length vs Error | | ✅ Secondary | | | ✅ | ✅ |
-| Error-Type over Quartiles | | ✅ Secondary | | | ✅ | ✅ |
-| FTIR (over time) | | ✅ Supporting | | | ✅ | ✅ |
-| RSR | | | ✅ Primary | ✅ | ¹ | ¹ |
-| MRTC | | | ✅ Primary | ✅ | ¹ | ¹ |
-| LCPT | | | ✅ Primary | ✅ | ✅ | ✅ |
-| TPT | | | ✅ Primary | ✅ | ✅ | ✅ |
-| MRPT | | | ✅ Supporting | ✅ | ¹ | ¹ |
-| Latency Per Turn | | | ✅ Supporting | ✅ | ✅ | ✅ |
-| CAFIR | | | ✅ Secondary | ✅ | ¹ | ¹ |
-| Critic Confusion Matrix | | | ✅ Secondary | ✅ | | |
-| Error-Type × Condition | | | ✅ Secondary | ✅ | | |
-| TCR, VTA, Tool Dist. (F) | | | ✅ F-specific | ✅ | ¹ | ¹ |
-| Puzzle Legality Rate | | | | ✅ | | |
-| Puzzle Accuracy | | | | ✅ | | |
-
-> ¹ Computed in Exp 2/3 only if the best-performing condition from Exp 1 includes the relevant mechanism (retries for RSR/MRTC/MRPT/CAFIR; tool calling for TCR/VTA).
-
-### 5.5 Error Taxonomy
-
-Classify each illegal move into an error type for recurrence analysis and the Error-Type × Condition recovery matrix:
+Every illegal move is classified into exactly one error type. This taxonomy is referenced by all metrics involving error categorization (RSR heatmaps, recurrence analysis, quartile distributions).
 
 | Error Type | Description | Detection |
 |------------|-------------|-----------|
@@ -596,69 +429,291 @@ Classify each illegal move into an error type for recurrence analysis and the Er
 | `PARSE_ERROR` | Output cannot be parsed as UCI | Regex parser |
 | `NO_OUTPUT` | LLM returned empty or irrelevant text | Parser |
 
-### 5.6 Experiment 1–Specific Metrics
+### 5.2 Experiment 1 Metrics — Isolated Positions
 
-These metrics apply only to the isolated-position evaluation in Experiment 1, where each data point is a single puzzle position.
+Each data point is a single puzzle position evaluated once per condition. N=300 positions × 6 conditions = 1,800 evaluations. All metrics are computed from this data.
 
-| Metric | Definition | Formula | Notes |
-|--------|------------|---------|-------|
-| **Puzzle Legality Rate** | Fraction of puzzles where the LLM produced a legal move | `1 − FIR` (in Exp 1 context) | Equivalent to OLR; cleaner label for single-position reporting |
-| **Puzzle Accuracy** | Fraction of puzzles where the LLM produced the correct solution move | `correct_solutions / total_puzzles` | Bonus metric separating "legal but arbitrary" from "legal and correct"; not required for any RQ but provides useful context on LLM chess understanding |
+| Metric | Definition | Formula | Conditions |
+|--------|------------|---------|------------|
+| **Final Invalid Rate (FIR)** | Fraction of positions ending in forfeit after all retries | `forfeits / total_positions` | All |
+| **First-Try Invalid Rate (FTIR)** | Fraction of positions where the first attempt was illegal | `first_try_invalid / total_positions` | All |
+| **Marginal FIR Reduction (MFIR)** | Percentage reduction in FIR when adding a role | `(FIR_X − FIR_Y) / FIR_X` for paired conditions X→Y | Paired |
+| **Absolute Risk Reduction (ARR)** | Absolute drop in FIR between conditions | `FIR_X − FIR_Y` for paired conditions X→Y | Paired |
+| **Phase-Stratified FIR** | FIR computed within Opening / Middlegame / Endgame | FIR per phase bucket | All |
+| **Parse Failure Counts** | Raw count of `PARSE_ERROR` + `NO_OUTPUT` | Count | All |
+| **Retry Success Rate (RSR)** | Of initially-invalid moves, fraction corrected within N retries | `corrected / initially_invalid` | C, D, E |
+| **Mean Retries to Correct (MRTC)** | Average retries when correction succeeds | `sum(retries_for_corrected) / count(corrected)` | C, D, E |
+| **LLM Calls Per Turn (LCPT)** | Total API calls per position | Count per position | All |
+| **Tokens Per Turn (TPT)** | Total tokens (input + output) per position | Count per position | All |
+| **Cost-Adjusted FIR (CAFIR)** | FIR penalized by compute cost | `FIR × LCPT` | C, D, E, F |
+| **Critic Accuracy (TPR, FPR, TNR, FNR)** | Confusion matrix vs. `python-chess` ground truth | Standard rates | C only |
+| **Error-Type × Condition RSR** | RSR per error type per condition (heatmap) | RSR within each error category | C, D, E |
+| **Validation Tool Adoption (VTA)** | Fraction of turns using `validate_move` before submission | `validate_turns / total_turns` | F only |
+| **Tool Call Rate (TCR)** | Fraction of turns with any tool call | `tool_turns / total_turns` | F only |
+| **Tool-Call Distribution** | Frequency breakdown per tool type | Histogram | F only |
+| **Tool-Stratified FIR** | FIR split by whether tools were used | FIR per tool-usage group | F only |
+| **Avg. Reasoning Steps** | Mean think/act cycles per turn | `total_steps / total_turns` | F only |
+
+> [!NOTE]
+> **MFIR edge case**: If the baseline condition has FIR = 0, MFIR is undefined (division by zero). In this case, ARR must be reported exclusively. Both MFIR and ARR are tested via the existing McNemar pairs.
+
+MFIR is computed for each chained pair to show the marginal value of each architectural role:
+
+| Pair | What It Isolates |
+|------|------------------|
+| A → B | Framework overhead (should be ≈ 0) |
+| B → C | Adding a Critic role |
+| B → D | Adding a Symbolic Validator role |
+| D → E | Adding an Explainer role on top of Validator |
+| B → F | Adding autonomous tool access |
+
+Expected LCPT by condition:
+
+| Condition | Min LCPT | Max LCPT | Notes |
+|-----------|----------|----------|-------|
+| A | 1 | 1 | Single call, no retries |
+| B | 1 | 1 | Single call, no retries |
+| C | 2 | 2 + 2N | Generator + Critic per attempt |
+| D | 1 | 1 + N | Generator only; validator is symbolic (free) |
+| E | 1 | 1 + 2N | Generator + Explainer per failed attempt |
+| F | 1 | M | 1 to M reasoning steps, each may call LLM |
+
+> [!IMPORTANT]
+> **CAFIR exclusion**: Conditions A and B are strictly excluded from CAFIR ranking because their LCPT is architecturally locked at 1. They cannot trade cost for quality and are reported separately as fixed baselines.
+
+> [!IMPORTANT]
+> **Critic FNR**: The Critic False Negative Rate measures how often the Critic *approves* an illegal move. Since the ground-truth check after Critic approval causes a forfeit (not a retry), a high FNR means the Critic is a liability — it provides false confidence.
+
+### 5.3 Experiments 2 & 3 Metrics — Full Games
+
+Each data point is a full game against Stockfish (N=50 games × 3 conditions × 2 experiments = 300 games). Experiment 2 provides the full FEN every turn; Experiment 3 provides move history only.
+
+| Metric | Definition | Formula | Conditions |
+|--------|------------|---------|------------|
+| **Final Invalid Rate (FIR)** | Fraction of turns ending in forfeit | `forfeits / total_turns` | All |
+| **First-Try Invalid Rate (FTIR)** | Fraction of turns where first attempt was illegal | `first_try_invalid / total_turns` | All |
+| **Illegal-Move Forfeit Rate (IMFR)** | Fraction of games lost specifically to a rule violation | `forfeit_games / total_games` | All |
+| **Forfeit Survival Time (FST)** | Half-moves played before a rule-violation forfeit | Kaplan-Meier estimand | All |
+| **Same-Error Recurrence Rate (SERR)** | Fraction of error types that occur more than once in a game | Per-game rate | All |
+| **Post-Correction Recurrence (PCRR)** | Frequency of repeating the same error type after correction | Per-game rate | Retry only ¹ |
+| **Turns-to-Recovery (TTR)** | Clean moves following a corrected error | Count per correction event | Retry only ¹ |
+| **Legality Degradation Curve** | FTIR plotted in 10-move bins over game progress | Visual + regression | All |
+| **FIR Cross-Experiment Δ** | Per-condition FIR difference between Exp 2 and Exp 3 | Paired by starting position | All |
+| **Error Clustering Coefficient (ECC)** | Ratio of observed consecutive error pairs to expected pairs | Per-game ratio | All |
+| **Input Length vs. Error Correlation** | Spearman's ρ between prompt token count and error occurrence | Partial correlation | All |
+| **Error-Type Dist. over Quartiles** | Error taxonomy frequency by turn quartile (Q1–Q4) | Chi-squared table | All |
+| **Parse Failure Counts** | Raw count of `PARSE_ERROR` + `NO_OUTPUT` | Count | All |
+| **LLM Calls Per Turn (LCPT)** | Average API calls per turn | `total_llm_calls / total_turns` | All |
+| **Tokens Per Turn (TPT)** | Average tokens (input + output) per turn | `total_tokens / total_turns` | All |
+
+> ¹ PCRR and TTR are only computable for conditions with a retry mechanism. Conditions A and B forfeit on first illegal move — there is no correction event and therefore no recovery to measure. These metrics are reported as N/A for A and B.
+
+**ECC operationalization**:
+
+```
+ECC = (observed pairs of errors in consecutive turns) /
+      (Σ FTIR(t) × FTIR(t+1)  for t = 1 … total_turns − 1)
+```
+
+A flat Bernoulli baseline (i.e. `(total_turns − 1) × FTIR²`) is explicitly rejected here because the Legality Degradation Curve shows that error probability increases with move number. Using a single global FTIR would underestimate expected late-game error pairs and artificially inflate ECC in the endgame. The time-varying formulation computes expected pairs turn-by-turn using the empirical FTIR at each position.
+
+> [!IMPORTANT]
+> **FTIR(t) definition**: `FTIR(t)` is the empirical first-try error rate at turn `t` **pooled across all games in that condition** — not a per-game quantity. Within a single game, each turn is binary (error or not), so a per-game FTIR(t) would be 0 or 1, which is meaningless as a probability baseline. Each game's observed pairs are divided by the population-level expected pairs, yielding a per-game ECC ratio suitable for bootstrapping.
+
+- ECC > 1 → errors cluster (one error makes the next more likely)
+- ECC ≈ 1 → errors are independent
+- ECC < 1 → errors anti-cluster (correction effect — error makes next turn *less* likely to error)
+
+**Key rationales**:
+
+- **FST**: Replaces the prior Moves Before Forfeit (MBF) metric with a proper survival-analysis estimand. Games reaching natural termination (checkmate/draw) **and** games hitting the 150 half-move limit are right-censored at their final move, not excluded.
+- **Input Length vs. Error**: In Exp 3 (history-only), the prompt grows every turn. A strong positive ρ in Exp 3 but not Exp 2 (fixed-size FEN) indicates context-window degradation — not game complexity — drives inconsistency.
+- **Error-Type over Quartiles**: The Legality Degradation Curve shows aggregate trends but not *which* error types drive degradation. This metric breaks down the taxonomy by game progress quartile (Q1: turns 1–25%, Q2: 25–50%, Q3: 50–75%, Q4: 75–100%).
+
+> [!NOTE]
+> **Scope limitation**: Experiments 2 & 3 run only A, B, and the best condition from Exp 1. Metrics requiring retry mechanisms (PCRR, TTR, RSR, CAFIR) or tool-calling (TCR, VTA, Tool-Stratified FIR) are only computed if the best-performing condition includes those mechanisms.
 
 ---
 
-## 6. Statistical Analysis Plan
+## 6. Research Question Analysis
 
-### 6.1 RQ1 Comparisons
+### 6.1 RQ1: Can explicit role separation reduce rule violations?
 
-| Comparison | Test | Purpose |
-|------------|------|---------|
-| FIR across A–F (Exp 1) | Cochran’s Q test (paired) + post-hoc McNemar with Bonferroni | Does role separation matter? |
-| MFIR for each pair (A→B, B→C, B→D, D→E, B→F) | 95% CI on MFIR via bootstrapping | Which role addition has the largest marginal effect? |
-| Phase-Stratified FIR | Cochran’s Q within each phase bucket; or logistic regression with interaction term `P(illegal) ~ condition × phase` | Does role separation help more in complex phases? |
-| GCR across conditions (Exp 2, 3) | Chi-squared test of proportions | Game-level survivability impact |
-| MBF across conditions (Exp 2, 3) | Kruskal-Wallis test | Robustness comparison |
+**Core question**: Does adding distinct agent roles (Critic, Validator, Explainer, ReAct tools) to the generation pipeline reduce the rate of illegal moves?
 
-### 6.2 RQ2 Comparisons
+#### 6.1.1 Metrics
 
-| Comparison | Test | Purpose |
-|------------|------|---------|
-| SERR & PCRR: Exp 2 vs 3 | Wilcoxon signed-rank (paired by starting position) | Board state vs history effect |
-| SERR & PCRR: across conditions within Exp 2 | Kruskal-Wallis | Does validation improve consistency? |
-| Legality Degradation | Mixed-effects logistic regression: `P(error) ~ move_number × condition × experiment + (1|game_id)` | Multi-turn consistency & representation effect |
-| FIR Cross-Experiment Δ | Wilcoxon signed-rank (paired by starting position, per condition) | Most direct test of FEN vs. history-only effect on final error rate |
-| ECC across conditions | Bootstrap 95% CI per condition; compare to 1.0 | Do errors cluster? |
-| Input Length vs Error | Spearman’s ρ per condition per experiment; compare ρ_Exp2 vs ρ_Exp3 using Fisher z-transformation | Context-window degradation |
-| Error-Type Distribution over Quartiles | Chi-squared test of homogeneity per error type across turn quartiles (Q1–Q4) | Is degradation uniform or concentrated in specific error types? |
+| Metric | Role | Source | What It Reveals |
+|--------|------|--------|-----------------|
+| FIR | Primary | Exp 1 | Main comparison axis — ultimate failure rate after all retries across all 6 conditions |
+| MFIR & ARR | Primary | Exp 1 | Marginal contribution of each added role (quantifies the value of upgrading A→B→C/D→E, B→F) |
+| Phase-Stratified FIR | Primary | Exp 1 | Whether architecture effectiveness depends on game phase (opening vs. middlegame vs. endgame) |
+| FTIR | Primary | Exp 1 | Relevant when MAS extensions (Planner-Actor, Router-Specialists) change the generation stage, making first-try rates differ across conditions |
+| IMFR | Primary | Exp 2, 3 | Game-level: fraction of games lost specifically to a rule violation |
+| FST | Primary | Exp 2, 3 | Game-level: how long the agent survives before a fatal illegal move |
 
-### 6.3 RQ3 Comparisons
+> [!NOTE]
+> **Why FTIR has limited RQ1 value in the base experiment**: For base conditions B–E (same generator LLM and prompt), FTIR measures the generator's first attempt *before* any validation occurs — it will be near-identical. The role-separation effect manifests in FIR (after the retry loop). However, Condition A always uses a plain generator, and with MAS extensions the generation stage can use (Strategist → Tactician) or (Router → Specialists), making FTIR a meaningful RQ1 differentiator in those comparisons.
 
-| Comparison | Test | Purpose |
-|------------|------|---------|
-| FIR across C, D, E, F (Exp 1) | Cochran’s Q + post-hoc McNemar with Bonferroni | Which enforcement strategy is best? |
-| RSR across C, D, E (Exp 1) | Chi-squared test of proportions | Retry effectiveness |
-| MRTC across C, D, E (Exp 1) | Kruskal-Wallis test | Correction speed |
-| LCPT and TPT across conditions | Kruskal-Wallis test | Cost comparison |
-| MRPT across C, D, E (Exp 1) | Kruskal-Wallis test | Diluted retry cost comparison |
-| Latency Per Turn across conditions | Kruskal-Wallis test (median); compare p95 tails | Practical deployment cost; tail latency detection |
-| CAFIR across C, D, E, F | Bootstrap ranking with 95% CI | Cost-effectiveness ranking |
-| Error-Type × Condition RSR | Chi-squared per error type across C, D, E | Strategy specialization |
-| Critic TPR, FPR, FNR (C only) | Point estimates with Wilson 95% CI | Critic reliability |
+#### 6.1.2 Statistical Tests
 
-### 6.4 Condition F Stratified Analysis
+| Test | Target Metric | Question Answered | Execution Details |
+|------|--------------|-------------------|-------------------|
+| **Cochran's Q** + **McNemar's** (post-hoc) | FIR (all conditions) | Do the architectures perform differently? Which specifically beats another? | N=300 matched pairs across all conditions. Parse failures count as forfeits, not missing data. McNemar with Bonferroni correction for confirmatory significance; Benjamini-Hochberg (FDR) flags exploratory signals. ARR is directly derived from these McNemar pairs. |
+| **95% Bootstrapped CI** | MFIR & ARR | What is the exact magnitude of upgrading the architecture? | Handles the ratio instability of MFIR. If FIR_baseline = 0, MFIR is undefined and ARR must be reported exclusively. |
+| **Logistic Regression** | Phase-Stratified FIR | Does architecture effectiveness depend on game phase? | Primary estimand: interaction term in `P(illegal) ~ condition + phase + condition × phase`. |
+| **Fisher's Exact Test** | IMFR | Do complex architectures reduce games lost to illegal moves? | Two-sided. Run pairwise across 3 conditions in Exp 2/3 (3 pairs per experiment) with Bonferroni correction. Required over Chi-squared because N=50 games makes expected cell counts < 5 highly likely. |
+| **Log-Rank Test** | FST (Kaplan-Meier) | Does the architecture significantly extend the agent's lifespan before a fatal error? | Games reaching natural termination (checkmate/draw) and games hitting the 150 half-move cap are strictly right-censored at their final move, not excluded. |
 
-- Split Condition F results by tool-call-rate terciles (low / medium / high)
-- Compare FIR within each tercile to test whether tool use causally reduces errors
-- Use logistic regression: `P(illegal) ~ tool_used + position_difficulty + game_phase`
-- Report VTA (validation tool adoption) as a predictor of FIR
+### 6.2 RQ2: Does structured validation improve multi-turn consistency?
+
+**Core question**: Does the agent maintain legality over the course of a full game? Does board representation (FEN vs. history-only) affect error patterns, recurrence, and degradation?
+
+> [!IMPORTANT]
+> **FDR Correction**: RQ2 runs ≈12 overlapping inferential tests on the same datasets. A Benjamini-Hochberg False Discovery Rate correction (q < 0.05) must be applied across all p-values before interpreting significance. Breakdown: 3 (FIR Δ per condition) + 2 (SERR & PCRR paired) + 1 (Legality Degradation key coefficient) + 1 (Input Length Fisher z) + 2 (Kruskal-Wallis SERR & PCRR) + 1 (TTR) + 2 (Error-Type Quartiles per experiment) = 12. Confirm exact count during pre-analysis protocol finalization.
+
+#### 6.2.1 Metrics
+
+| Metric | Role | Comparison Axis |
+|--------|------|-----------------|
+| FIR Cross-Experiment Δ | Primary | Exp 2 vs 3 per condition — most direct test of FEN vs. history-only |
+| SERR | Primary | Cross-condition + Exp 2 vs 3 |
+| PCRR | Primary | Cross-condition + Exp 2 vs 3 (retry conditions only) |
+| TTR | Primary | Exp 2 vs 3 (retry conditions only) |
+| Legality Degradation Curve | Primary | Cross-condition + Exp 2 vs 3 — does failure rate spike over time? |
+| ECC | Secondary | Cross-condition + Exp 2 vs 3 — do errors trigger cascading failure loops? |
+| Input Length vs. Error | Secondary | Exp 2 vs 3 — isolates context-window fatigue from positional complexity |
+| Error-Type Dist. over Quartiles | Secondary | Cross-condition + Exp 2 vs 3 — which error types drive degradation? |
+| FTIR (per-game, over time) | Supporting | Cross-condition — time-series of raw error rate |
+
+#### 6.2.2 Statistical Tests
+
+| Test | Target Metric | Question Answered | Execution Details |
+|------|--------------|-------------------|-------------------|
+| **Wilcoxon Signed-Rank** | FIR Cross-Experiment Δ | Does seeing the full board (FEN) reduce per-turn error rates compared to history-only? | Paired by starting position, computed per condition. Per-game FIR values are the paired observations. |
+| **Wilcoxon Signed-Rank** | SERR & PCRR (Exp 2 vs 3) | Does FEN prevent repeating mistakes better than move history? | Paired by starting position. Assumes uniform application of the error taxonomy. |
+| **Mixed-Effects Logistic Regression** | Legality Degradation | Does the agent's failure rate spike as the game progresses? | Must include random intercept per game `(1|game_id)` for intra-game correlation. |
+| **Partial Spearman's ρ** | Input Length vs. Error | Is the LLM failing due to prompt length or positional complexity? | Partial out `move_number` to isolate token count. Compare Exp 2 vs Exp 3 ρ values via Fisher z-transformation. |
+| **Bootstrap 95% CI** | ECC | Do errors cause cascading failure loops (avalanches)? | Time-varying baseline `FTIR(t) × FTIR(t+1)`. Aggregation: sum(observed)/sum(expected) per game. CI on game-level ECC values. |
+| **Kruskal-Wallis** | SERR & PCRR | Which architecture best prevents hallucination loops? | Across 3 conditions within Experiment 2. Low power with k=3 at N=50 acknowledged; report effect sizes alongside p-values. |
+| **Mann-Whitney U** or **Kaplan-Meier** | TTR | Which architecture returns to clean play fastest after a mistake? | Retry conditions only. Default: Mann-Whitney U. If censoring is substantial (>20% of corrections result in clean play until game end), switch to Kaplan-Meier survival curves. |
+| **Chi-Squared of Homogeneity** | Error-Type over Quartiles | Does the *type* of mistake change as the agent gets fatigued? | Pre-analysis rule: error types with expected cell frequency < 5 must be collapsed into an "Other" category. |
+
+### 6.3 RQ3: How should rule enforcement be embedded?
+
+**Core question**: Comparing enforcement strategies — LLM Critic (C) vs. Symbolic Validator (D) vs. Symbolic+Explainer (E) vs. ReAct+Tools (F) — which provides the best reliability, at what cost, and with what failure modes?
+
+#### 6.3.1 Metrics
+
+**Effectiveness**:
+
+| Metric | Role | Conditions | What It Reveals |
+|--------|------|------------|-----------------|
+| FIR | Primary | All | Ultimate failure rate — which strategy lets the fewest errors through? |
+| Phase-Stratified FIR | Primary | All | Does enforcement effectiveness vary by game phase? |
+| RSR | Primary | C, D, E | Of initially-invalid moves, what fraction gets corrected? |
+| MRTC | Primary | C, D, E | How many retries does correction take on average? |
+
+**Cost & Efficiency**:
+
+| Metric | Role | Conditions | What It Reveals |
+|--------|------|------------|-----------------|
+| LCPT | Primary | All | API cost per move — how expensive is each strategy? |
+| TPT | Primary | All | Token consumption — compute footprint |
+| CAFIR | Secondary | C, D, E, F | ROI metric — is the cost worth the error reduction? A,B excluded (LCPT=1). |
+| Parse Failure Counts | Diagnostic | All | Raw formatting failures (`PARSE_ERROR` + `NO_OUTPUT`) — logged across all experiments |
+
+**Critic Accuracy** (Condition C only):
+
+| Metric | Definition |
+|--------|------------|
+| TPR | P(Critic says invalid ∣ move is actually invalid) |
+| FPR | P(Critic says invalid ∣ move is actually valid) |
+| TNR | P(Critic says valid ∣ move is actually valid) |
+| FNR | P(Critic says valid ∣ move is actually invalid) |
+
+Ground-truth classifications determined strictly by `python-chess`. The puzzle's tactical solution is irrelevant.
+
+**Error-Type Recovery**: RSR per error type per condition (C, D, E), presented as a heatmap. Reveals which enforcement strategy excels at which error types. RSR heatmaps must be presented alongside base-rate frequency — high RSR for rare error types (small cell counts) must be flagged.
+
+**Condition F Agent Behavior**:
+
+| Metric | Definition |
+|--------|------------|
+| TCR | Fraction of turns where at least one tool was called |
+| Tool-Call Distribution | Frequency breakdown per tool type |
+| VTA | Fraction of turns where `validate_move` was called before submission |
+| Tool-Stratified FIR | FIR split by whether tools were used |
+| Avg. Reasoning Steps | Mean think/act cycles per turn |
+
+#### 6.3.2 Statistical Tests
+
+| Test | Target Metric | Question Answered | Execution Details |
+|------|--------------|-------------------|-------------------|
+| **Cochran's Q** + **McNemar's** (post-hoc) | FIR (C, D, E, F) | Which enforcement strategy is the ultimate winner for reliability? | Same constraints as RQ1: strict matched pairs, parse errors = forfeits. Bonferroni correction. |
+| **Fisher's Exact Test** | RSR | Which strategy fixes the most errors? | Preferred over Chi-squared: 3 conditions (C, D, E) with potentially rare error types make expected cells < 5 likely. |
+| **Chi-Squared of Proportions** | Parse Failure Counts | Which strategy formats output best? | Numerator combines `PARSE_ERROR` + `NO_OUTPUT`. |
+| **Kruskal-Wallis** | MRTC, LCPT, TPT | Which strategy uses least compute and recovers fastest? | Required: API calls, tokens, and retry steps are non-normally distributed counts. |
+| **Bootstrap Ranking (95% CI)** | CAFIR | Which strategy offers the best ROI factoring in API costs? | A & B strictly excluded from ranking (LCPT locked at 1). Reported separately as fixed baselines. |
+| **Chi-Squared of Homogeneity** + **Fisher's Exact** | Error-Type × Condition RSR | Do architectures have blind spots for specific error types? | Fisher's Exact when expected cell counts < 5. High RSR for rare error types must be flagged. |
+| **Wilson 95% CI** | TPR, FPR, TNR, FNR (Critic) | How trustworthy is the LLM Critic? | Wilson intervals handle small denominators correctly. |
+
+#### 6.3.3 Condition F Stratified Analysis
+
+| Analysis | Target | Purpose | Execution Details |
+|----------|--------|---------|-------------------|
+| Tool-use tercile split | Tool-Stratified FIR | Does tool use causally reduce errors? | Split by TCR terciles (low/med/high); compare FIR within each. |
+| Logistic Regression | FIR ~ tool usage | Controlled test of tool effect | `P(illegal) ~ tool_used + position_difficulty + game_phase`. Report odds ratios with 95% CI. |
+| Descriptive statistics | TCR, VTA, Tool-Call Dist., Avg. Reasoning Steps | Agent behavior profile | Medians with IQR. VTA as predictor of FIR. Tool-Call Distribution as frequency histogram per tool type. |
+
+### 6.4 Complete RQ → Metric → Experiment Mapping
+
+| Metric | RQ1 | RQ2 | RQ3 | Exp 1 | Exp 2 | Exp 3 |
+|--------|-----|-----|-----|-------|-------|-------|
+| FIR | ✅ Primary | | ✅ Primary | ✅ | ✅ | ✅ |
+| FTIR | ✅ ¹ | ✅ Primary | | ✅ | ✅ | ✅ |
+| MFIR | ✅ Primary | | | ✅ | | |
+| ARR | ✅ Primary | | | ✅ | | |
+| Phase-Stratified FIR | ✅ Primary | | ✅ | ✅ | | |
+| IMFR | ✅ Primary | | | | ✅ | ✅ |
+| FST | ✅ Primary | | | | ✅ | ✅ |
+| SERR | | ✅ Primary | | | ✅ | ✅ |
+| PCRR | | ✅ Primary | | | ✅ ² | ✅ ² |
+| TTR | | ✅ Primary | | | ✅ ² | ✅ ² |
+| Legality Degradation | | ✅ Primary | | | ✅ | ✅ |
+| FIR Cross-Experiment Δ | | ✅ Primary | | | ✅ | ✅ |
+| ECC | | ✅ Secondary | | | ✅ | ✅ |
+| Input Length vs Error | | ✅ Secondary | | | ✅ | ✅ |
+| Error-Type over Quartiles | | ✅ Secondary | | | ✅ | ✅ |
+| FTIR (over time) | | ✅ Supporting | | | ✅ | ✅ |
+| Parse Failure Counts | | | ✅ Diagnostic | ✅ | ✅ | ✅ |
+| RSR | | | ✅ Primary | ✅ | ³ | ³ |
+| MRTC | | | ✅ Primary | ✅ | ³ | ³ |
+| LCPT | | | ✅ Primary | ✅ | ✅ | ✅ |
+| TPT | | | ✅ Primary | ✅ | ✅ | ✅ |
+| CAFIR | | | ✅ Secondary | ✅ | ³ | ³ |
+| Critic Accuracy | | | ✅ Secondary | ✅ | | |
+| Error-Type × Condition RSR | | | ✅ Secondary | ✅ | | |
+| VTA (Cond. F) | | | ✅ F-specific | ✅ | ³ | ³ |
+| TCR (Cond. F) | | | ✅ F-specific | ✅ | ³ | ³ |
+| Tool-Call Distribution (F) | | | ✅ F-specific | ✅ | ³ | ³ |
+| Tool-Stratified FIR (F) | | | ✅ F-specific | ✅ | ³ | ³ |
+| Avg. Reasoning Steps (F) | | | ✅ F-specific | ✅ | ³ | ³ |
+
+> ¹ FTIR becomes RQ1-relevant when MAS extensions (Planner-Actor, Router-Specialists) change the generation stage. For base conditions B–E (same generator), FTIR is expected to be near-identical across conditions.
+>
+> ² Only computable for conditions with retry mechanisms. Conditions A and B forfeit on first error.
+>
+> ³ Computed in Exp 2/3 only if the best-performing condition from Exp 1 includes the relevant mechanism (retries for RSR/MRTC/CAFIR; tool calling for TCR/VTA/Tool-Stratified FIR).
 
 ### 6.5 Effect Size & Power
 
-- Report **odds ratios** with 95% CI for rate-based metrics
-- Report **Cohen’s d** for continuous metrics (MRTC, MRPT, LCPT, TPT, Latency Per Turn)
-- With N=300 per condition (Exp 1), a 10-percentage-point difference in FIR (e.g., 40% vs 30%) is detectable at α=0.05, power=0.80 (chi-squared test)
-- With N=50 games (Exp 2, 3), per-game GCR differences of ~20 percentage points are detectable
-- Use Bonferroni correction for all pairwise comparisons within each RQ
+- Report **odds ratios** with 95% CI for all rate-based metrics
+- Report **Cohen's d** for continuous metrics (MRTC, LCPT, TPT)
+- With N=300 per condition (Exp 1), a 10-percentage-point difference in FIR (e.g., 40% vs 30%) is detectable at α=0.05, power=0.80
+- With N=50 games (Exp 2, 3), per-game IMFR differences of ~20 percentage points are detectable
+- Bonferroni correction for all pairwise comparisons within RQ1 and RQ3
+- Benjamini-Hochberg FDR correction (q < 0.05) for the RQ2 family of ≈12 tests
 
 ---
 
@@ -795,25 +850,6 @@ Maat/
 | Stockfish games too long | Exceeds token limits | Cap at 150 half-moves; use Stockfish ELO 800 for shorter games |
 | Critic agent (C) has very high false-positive rate | Condition C looks worse than A | This IS a valid finding (LLM-only validation is unreliable) — report it |
 | Gemma 4 refuses to play chess | Blocking | Pilot test; if needed, adjust system prompt or consider model switch |
-
----
-
-## Open Questions
-
-> [!IMPORTANT]
-> **Q1**: For the Critic in Condition C — should the Critic have access to the list of legal moves (from `python-chess`), or should it reason purely from the FEN? If it has access to legal moves, it becomes partially symbolic. I recommend **no legal-move access** to keep it a pure LLM critic. Do you agree?
-
-> [!IMPORTANT]
-> **Q2**: For Experiment 1, you said "play any legal move." Should we also record whether the LLM's move matches the puzzle solution as a secondary quality metric? This is essentially free data and could enrich the thesis, even if legality is the primary focus.
-
-> [!IMPORTANT]
-> **Q3**: What value of **N** (max retries) do you want for conditions C, D, E? I proposed N=3 above. Higher N gives more correction chances but increases API cost and may make comparisons with A/B less fair.
-
-> [!IMPORTANT]
-> **Q4**: For Condition B ("Generator Only in LangGraph"), since it forfeits on first illegal move just like A, should the game-level comparison focus on **per-move FTIR** (which should be identical to A) to confirm there's no framework effect? Or do you see Condition B serving a different purpose?
-
-> [!IMPORTANT]
-> **Q5**: Temperature and sampling — I recommend **temperature=0** (greedy decoding) across all conditions for reproducibility. Do you agree, or do you want to test with non-zero temperature?
 
 ---
 

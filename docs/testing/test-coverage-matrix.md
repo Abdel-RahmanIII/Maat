@@ -12,10 +12,12 @@
 | Engine wrapper | `src/engine/stockfish_wrapper.py` | `tests/engine/test_stockfish_wrapper.py` | 4 | invalid FEN handling, path resolution rules, legal engine move generation |
 | Agent base | `src/agents/base.py` | `tests/agents/test_base.py` | 8 | prompt loading (success + failure), board repr (fen + history modes), feedback formatting (empty + entries), side-to-move |
 | Graphs | `src/graph/base_graph.py`, `condition_a.py`, `condition_b.py`, `condition_d.py` | `tests/graph/test_conditions.py` | 15 | parse_and_validate (valid, illegal, unparseable, empty, promotion), Condition A (valid + forfeit), Condition B (valid + forfeit, no-retry verification), Condition D (first-try success, retry-then-succeed, exhaust retries), config factory |
+| Metrics | `src/metrics/definitions.py`, `collector.py`, `aggregator.py`, `recurrence.py` | `tests/metrics/test_definitions.py`, `tests/metrics/test_collector.py`, `tests/metrics/test_aggregator.py`, `tests/metrics/test_recurrence.py` | 99 | Pydantic model validation/serialization, collector timing + phase inference, metric formulas/edge cases, recurrence and clustering metrics |
 
 ## Coverage Notes
 
 - Graph tests use mocked LLM calls — they test the full pipeline (parsing, validation, retry, state) without API keys.
+- Metrics tests are deterministic and use synthetic TurnRecord/GameRecord fixtures to validate formulas and edge-case handling.
 - Conditions C/E are structurally similar to D, differing only in the feedback agent (Critic/Explainer). Their agent modules can be tested independently with mocked LLM calls.
 - Condition F's ReAct loop is not unit-tested due to complex ToolNode interactions — it requires integration testing with a real or mock LLM.
 - Agents (generator, critic, explainer, etc.) are not individually unit-tested yet because they require LLM mocking at the LangChain level. Their logic is exercised indirectly through graph tests.

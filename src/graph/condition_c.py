@@ -76,6 +76,8 @@ def build_graph(
         result = critique_move(
             fen=state["board_fen"],
             proposed_move=state["proposed_move"],
+            move_history=state["move_history"],
+            input_mode=state.get("input_mode", "fen"),
             model_config=cfg,
         )
 

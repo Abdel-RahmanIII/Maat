@@ -18,7 +18,7 @@ import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 # ── Make sure `src` is importable ────────────────────────────────────────
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -30,7 +30,7 @@ from src.agents.base import (  # noqa: E402
     build_board_representation,
     format_feedback_block,
     get_side_to_move,
-    load_prompt,
+    load_agent_prompt,
 )
 from src.config import ModelConfig  # noqa: E402
 from src.engine.stockfish_wrapper import StockfishWrapper  # noqa: E402
@@ -43,23 +43,6 @@ PROMPTS_DIR = PROJECT_ROOT / "src" / "prompts"
 UI_FILE = Path(__file__).resolve().parent / "prompt_lab_ui.html"
 RATE_MOVE_ELO = int(os.getenv("PROMPT_LAB_RATE_MOVE_ELO", "2500"))
 RATE_MOVE_TIME_LIMIT_S = float(os.getenv("PROMPT_LAB_RATE_MOVE_TIME_LIMIT_S", "0.12"))
-
-# ── Tactician inline template (not in a file) ───────────────────────────
-TACTICIAN_TEMPLATE = """\
-You are a chess tactician. You are playing as {color}.
-
-{board_representation}
-
-Move history (UCI): {move_history}
-
-A strategist has provided the following plan:
---- STRATEGIC PLAN ---
-{strategic_plan}
---- END PLAN ---
-{feedback_block}
-Based on this plan, select the best concrete move.
-Output exactly one move in UCI format (e.g., e2e4, g1f3).
-Respond with ONLY the UCI move, no explanation."""
 
 # ── Role definitions ─────────────────────────────────────────────────────
 
@@ -238,10 +221,10 @@ def render_prompt(role_id: str, params: dict[str, Any], template_override: str |
     # Load template
     if template_override:
         template = template_override
-    elif role["prompt_file"] is None:
-        template = TACTICIAN_TEMPLATE
+        system_message = role["system_message"]
     else:
-        template = load_prompt(role["prompt_file"])
+        template = load_agent_prompt(role_id, input_mode, "user")
+        system_message = load_agent_prompt(role_id, input_mode, "system")
 
     template_raw = template
 
@@ -252,6 +235,8 @@ def render_prompt(role_id: str, params: dict[str, Any], template_override: str |
                    "opening_specialist", "middlegame_specialist", "endgame_specialist",
                    "react"):
         fmt_vars["color"] = get_side_to_move(fen)
+        fmt_vars["fen"] = fen
+        fmt_vars["ascii_board"] = str(chess.Board(fen))
         fmt_vars["board_representation"] = build_board_representation(fen, input_mode, move_history)
         fmt_vars["move_history"] = " ".join(move_history) if move_history else "(none)"
 
@@ -269,13 +254,16 @@ def render_prompt(role_id: str, params: dict[str, Any], template_override: str |
 
     if role_id in ("critic", "explainer"):
         board = chess.Board(fen)
+        fmt_vars["color"] = get_side_to_move(fen)
         fmt_vars["fen"] = fen
-        fmt_vars["board_ascii"] = str(board)
+        fmt_vars["ascii_board"] = str(board)
+        fmt_vars["move_history"] = " ".join(move_history) if move_history else "(none)"
         fmt_vars["proposed_move"] = params.get("proposed_move", "")
 
     if role_id == "explainer":
         fmt_vars["error_type"] = params.get("error_type", "")
-        fmt_vars["error_reason"] = params.get("error_reason", "")
+        fmt_vars["attempted_move"] = params.get("proposed_move", "")
+        fmt_vars["engine_error_message"] = params.get("error_reason", "")
 
     # Render
     try:
@@ -284,7 +272,7 @@ def render_prompt(role_id: str, params: dict[str, Any], template_override: str |
         rendered = f"[Template rendering error: missing variable {e}]\n\nTemplate:\n{template}\n\nVariables:\n{json.dumps(fmt_vars, indent=2)}"
 
     return {
-        "system_message": role["system_message"],
+        "system_message": system_message,
         "human_message": rendered,
         "template_raw": template_raw,
     }
@@ -562,12 +550,11 @@ class PromptLabHandler(BaseHTTPRequestHandler):
             if role_id not in ROLES:
                 self._send_json({"error": f"Unknown role: {role_id}"}, 404)
                 return
-            role = ROLES[role_id]
-            if role["prompt_file"] is None:
-                text = TACTICIAN_TEMPLATE
-            else:
-                text = load_prompt(role["prompt_file"])
-            self._send_json({"template": text, "prompt_file": role["prompt_file"]})
+            query = parse_qs(parsed.query)
+            mode = str(query.get("input_mode", ["fen"])[0]).strip().lower()
+            input_mode = "history" if mode == "history" else "fen"
+            text = load_agent_prompt(role_id, input_mode, "user")
+            self._send_json({"template": text, "prompt_file": f"{role_id}.yaml", "input_mode": input_mode})
             return
 
         self._send_json({"error": "Not found"}, 404)

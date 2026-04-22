@@ -25,6 +25,7 @@ This documentation covers the **implemented** project state in the current repos
   - [LLM Client](modules/llm-client.md)
   - [Agents](modules/agents.md)
   - [Graphs](modules/graphs.md)
+  - [Metrics](modules/metrics.md)
   - [Config](modules/config.md)
   - [Prompts](modules/prompts.md)
 - Testing:
@@ -39,4 +40,4 @@ This documentation covers the **implemented** project state in the current repos
 
 ## Scope Note
 
-This docs set is intentionally implementation-first and reflects Phases 1 and 2 of the project.
+This docs set is intentionally implementation-first and reflects Phases 1, 2, and 3 of the project.

@@ -1,0 +1,28 @@
+# Experiment 1 — Isolated Position Evaluation
+# 300 positions × 6 conditions = 1,800 evaluations
+
+experiment: 1
+conditions: ["A", "B", "C", "D", "E", "F"]
+
+# Path to the JSONL file with puzzle inputs (relative to project root)
+puzzle_data: "src/data/Experiment 1/experiment_inputs.jsonl"
+
+# Output directory for results (JSONL, CSV, checkpoints)
+output_dir: "results/exp1"
+
+# Generation strategy: generator_only | planner_actor | router_specialists
+generation_strategy: "generator_only"
+
+# Rate limiting
+delay_seconds: 0.5
+
+# Exponential backoff for API errors
+max_api_retries: 5
+backoff_base: 2.0
+backoff_max: 60.0
+
+# Model configuration
+model:
+  model_name: "gemma-4-31b-it"
+  temperature: 0.0
+  max_output_tokens: 1024

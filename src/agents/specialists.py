@@ -9,11 +9,11 @@ from src.config import ModelConfig
 from src.state import InputMode
 
 
-# Mapping from phase → specialist prompt file
-_PHASE_PROMPTS: dict[str, str] = {
-    "opening": "opening_specialist.txt",
-    "middlegame": "middlegame_specialist.txt",
-    "endgame": "endgame_specialist.txt",
+# Mapping from phase -> specialist agent id
+_PHASE_AGENTS: dict[str, str] = {
+    "opening": "opening_specialist",
+    "middlegame": "middlegame_specialist",
+    "endgame": "endgame_specialist",
 }
 
 
@@ -32,7 +32,7 @@ def generate_specialist_move(
     Falls back to the default generator if the phase is unknown.
     """
 
-    prompt_template = _PHASE_PROMPTS.get(phase, "generator.txt")
+    agent_id = _PHASE_AGENTS.get(phase, "generator")
 
     return generate_move(
         fen=fen,
@@ -40,5 +40,5 @@ def generate_specialist_move(
         feedback_history=feedback_history,
         input_mode=input_mode,
         model_config=model_config,
-        prompt_template=prompt_template,
+        agent_id=agent_id,
     )

@@ -134,11 +134,11 @@ def get_game_phase(move_history: list[str]) -> str:
     """Infer game phase from move-history ply count."""
 
     ply_count = len(move_history)
-    if ply_count <= 20:
+    if ply_count <= 24:
         return "opening"
-    if ply_count <= 80:
-        return "middlegame"
-    return "endgame"
+    if ply_count >= 80:
+        return "endgame"
+    return "middlegame"
 
 
 @tool

@@ -72,14 +72,16 @@ def build_graph(
 
         result = explain_error(
             fen=state["board_fen"],
-            proposed_move=state["proposed_move"],
+            attempted_move=state["proposed_move"],
             error_type=error_type,
-            error_reason=error_reason,
+            engine_error_message=error_reason,
+            move_history=state["move_history"],
+            input_mode=state.get("input_mode", "fen"),
             model_config=cfg,
         )
 
         feedback = list(state["feedback_history"])
-        feedback.append(result["explanation"])
+        feedback.append(result["feedback_text"])
 
         return {
             "retry_count": state["retry_count"] + 1,

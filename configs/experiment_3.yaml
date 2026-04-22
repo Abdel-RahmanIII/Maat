@@ -1,0 +1,40 @@
+# Experiment 3 — Full Games with Move History Only
+# 50 games × 3 conditions = 150 games
+
+experiment: 3
+# Same conditions as Exp 2 — must match for paired comparison.
+conditions: ["A", "B"]
+# conditions: ["A", "B", "D"]  # example: uncomment after Exp 1 analysis
+
+input_mode: "history"
+
+# Same starting positions as Exp 2 (required for paired Wilcoxon tests)
+starting_positions: "configs/starting_positions.txt"
+
+# Game parameters
+max_half_moves: 150
+
+# Output directory
+output_dir: "results/exp3"
+
+# Rate limiting
+delay_seconds: 0.5
+
+# Exponential backoff for API errors
+max_api_retries: 5
+backoff_base: 2.0
+backoff_max: 60.0
+
+# Stockfish opponent
+stockfish:
+  elo: 1000
+  path: null  # auto-detect from PATH or STOCKFISH_PATH env var
+
+# Generation strategy
+generation_strategy: "generator_only"
+
+# Model configuration
+model:
+  model_name: "gemma-4-31b-it"
+  temperature: 0.0
+  max_output_tokens: 1024

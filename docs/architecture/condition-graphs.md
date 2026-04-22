@@ -4,6 +4,8 @@
 
 Six experimental conditions are implemented as either plain functions (A) or LangGraph `StateGraph` instances (B–F). All share the same `TurnState` contract and use `parse_and_validate` from `base_graph.py`.
 
+For implementation-level node behavior and state mutation details, see `docs/architecture/graph-implementation.md`.
+
 ## Condition Summary
 
 | Condition | Architecture | Retries | Validation | LLM Calls (min–max) |

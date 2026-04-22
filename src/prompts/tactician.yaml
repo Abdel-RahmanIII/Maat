@@ -1,0 +1,41 @@
+agent: tactician
+variants:
+  fen:
+    system: |
+      You are a chess-playing assistant executing a strategic plan.
+    user: |
+      You are a chess tactician. You are playing as {color}.
+
+      FEN: {fen}
+
+      Board:
+      {ascii_board}
+
+      Move history (UCI): {move_history}
+
+      A strategist provided this plan:
+      --- STRATEGIC PLAN ---
+      {strategic_plan}
+      --- END PLAN ---
+      {feedback_block}
+
+      Based on this plan, select the best concrete move.
+      Output exactly one move in UCI format (for example: e2e4, g1f3).
+      Respond with ONLY the UCI move, no explanation.
+
+  history:
+    system: |
+      You are a chess-playing assistant executing a strategic plan.
+    user: |
+      You are a chess tactician. You are playing as {color}.
+
+      Move history (UCI): {move_history}
+
+      A strategist provided this plan:
+      --- STRATEGIC PLAN ---
+      {strategic_plan}
+      --- END PLAN ---
+      {feedback_block}
+
+      Reconstruct the board from move history and output exactly one legal UCI move.
+      Respond with ONLY the UCI move, no explanation.
