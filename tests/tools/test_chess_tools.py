@@ -43,9 +43,9 @@ def test_is_in_check_detects_checking_square() -> None:
 def test_get_game_phase_thresholds() -> None:
     assert get_game_phase.invoke({"move_history": []}) == "opening"
     assert get_game_phase.invoke({"move_history": ["e2e4"] * 20}) == "opening"
-    assert get_game_phase.invoke({"move_history": ["e2e4"] * 21}) == "middlegame"
-    assert get_game_phase.invoke({"move_history": ["e2e4"] * 80}) == "middlegame"
-    assert get_game_phase.invoke({"move_history": ["e2e4"] * 81}) == "endgame"
+    assert get_game_phase.invoke({"move_history": ["e2e4"] * 25}) == "middlegame"
+    assert get_game_phase.invoke({"move_history": ["e2e4"] * 79}) == "middlegame"
+    assert get_game_phase.invoke({"move_history": ["e2e4"] * 80}) == "endgame"
 
 
 def test_get_move_history_pgn_formats_san_sequence() -> None:

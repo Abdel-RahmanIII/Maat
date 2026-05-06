@@ -22,14 +22,14 @@ ENDGAME_FEN = "8/8/4k3/8/8/4K3/8/8 w - - 0 40"
 class TestInferGamePhase:
     def test_opening(self):
         assert infer_game_phase(STARTING_FEN, 1) == "opening"
-        assert infer_game_phase(STARTING_FEN, 15) == "opening"
+        assert infer_game_phase(STARTING_FEN, 12) == "opening"
 
     def test_middlegame(self):
-        assert infer_game_phase(STARTING_FEN, 16) == "middlegame"
-        assert infer_game_phase(STARTING_FEN, 35) == "middlegame"
+        assert infer_game_phase(STARTING_FEN, 13) == "middlegame"
+        assert infer_game_phase(STARTING_FEN, 39) == "middlegame"
 
     def test_endgame_by_move_number(self):
-        assert infer_game_phase(STARTING_FEN, 36) == "endgame"
+        assert infer_game_phase(STARTING_FEN, 40) == "endgame"
 
     def test_endgame_by_material(self):
         # Move 20 but only kings on board — material ≤ 13
@@ -41,7 +41,7 @@ class TestInferGamePhase:
         assert infer_game_phase("NOT_A_FEN", 40) == "endgame"
 
     def test_material_threshold_boundary(self):
-        # KR vs K = 5 non-pawn material ≤ 13 → endgame
+        # KR vs K = 5 non-pawn material ≤ 10 → endgame
         fen_kr = "8/8/4k3/8/8/4K3/8/R7 w - - 0 20"
         assert infer_game_phase(fen_kr, 20) == "endgame"
 

@@ -86,12 +86,13 @@ class ConditionProgress:
 class ExperimentProgress:
     """Thread-safe per-experiment progress tracker."""
 
-    def __init__(self, experiment: int, conditions: list[str]) -> None:
+    def __init__(self, experiment: int, conditions: list[str], output_dir: Path | None = None) -> None:
         self.experiment = experiment
         self.conditions_progress: dict[str, ConditionProgress] = {}
         self._conditions = conditions
         self.status = "pending"
         self.started_at: str | None = None
+        self.output_dir: Path | None = output_dir
 
     def init_condition(self, condition: str, total: int) -> None:
         self.conditions_progress[condition] = ConditionProgress(condition, total)
@@ -297,7 +298,7 @@ class Orchestrator:
         backoff_max = config["backoff_max"]
 
         # Build experiment progress tracker
-        exp_progress = ExperimentProgress(exp_id, conditions)
+        exp_progress = ExperimentProgress(exp_id, conditions, output_dir=output_dir)
         exp_progress.status = "running"
         exp_progress.started_at = datetime.now().isoformat()
         self._experiments[exp_id] = exp_progress
@@ -651,7 +652,7 @@ class Orchestrator:
         """Persist progress for all experiments."""
 
         for exp_id, ep in self._experiments.items():
-            output_dir = _PROJECT_ROOT / "results" / f"exp{exp_id}"
+            output_dir = ep.output_dir or (_PROJECT_ROOT / "results" / f"exp{exp_id}")
             save_run_progress(
                 output_dir,
                 experiment=exp_id,

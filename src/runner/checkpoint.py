@@ -1,9 +1,9 @@
 """Turn-level checkpoint persistence for resumable experiments.
 
-Extends the existing game-level checkpoint (``results/expN/.checkpoint``)
+Extends the existing game-level checkpoint (``output_dir/.checkpoint``)
 with per-game state files that capture mid-game progress:
 
-    results/expN/.game_state/{game_id}.json
+    output_dir/.game_state/{game_id}.json
 
 On resume, incomplete games are detected and continued from the last
 completed turn.
@@ -118,7 +118,7 @@ def save_run_progress(
 ) -> Path:
     """Save overall experiment-run progress for dashboard display on resume.
 
-    Written to ``results/expN/.run_progress.json``.
+    Written to ``output_dir/.run_progress.json``.
     """
 
     path = output_dir / ".run_progress.json"
