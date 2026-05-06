@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from src.config import ModelConfig, config_for_condition
+from src.context import ConversationContext
 from src.engine.condition_dispatch import dispatch_turn_with_backoff
 from src.engine.result_store import (
     append_checkpoint,
@@ -226,6 +227,8 @@ class PuzzleManager:
         # ── Execute the turn ──
         collector.start_turn()
 
+        context = ConversationContext()  # One per puzzle (single turn, uniform API)
+
         state = dispatch_turn_with_backoff(
             condition,
             fen=fen,
@@ -239,6 +242,7 @@ class PuzzleManager:
             max_api_retries=self.max_api_retries,
             base_delay=self.backoff_base,
             max_delay=self.backoff_max,
+            context=context,
         )
 
         collector.end_turn(state)

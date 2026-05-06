@@ -164,20 +164,39 @@ Compared to D, E trades token cost for potentially higher correction quality.
 
 File: `src/graph/condition_f.py`
 
-### Execution
+### Nodes
 
-1. Run `run_react_loop(...)` with `max_steps` (default 6).
-2. If loop forfeits (no `submit_move`), mark `NO_OUTPUT` and `forfeit`.
-3. If loop submits a move, run `parse_and_validate(submitted, fen)`.
-4. Valid move -> `ongoing`; invalid -> `forfeit`.
-5. Append one `snapshot_turn_result(state)`.
+- `agent_reason`
+- `execute_tools`
+- `extract_submit`
+- `ground_truth`
+- `accept`
+- `forfeit`
 
-### State Fields Populated from ReAct
+### Flow
 
-- `tool_calls` from `tool_calls_log`
-- `llm_calls_this_turn` from `steps_taken`
-- `tokens_this_turn` from prompt + completion totals
-- `prompt_token_count` from prompt totals
+1. `agent_reason` invokes the tool-bound LLM with the current message history.
+   Increments `react_steps_taken`.
+2. Routing after `agent_reason`:
+   - If tool calls include `submit_move` → `extract_submit` → `ground_truth`
+   - If tool calls present (non-submit) → `execute_tools`
+   - If text-fallback submit found → `ground_truth`
+   - If `react_steps_taken < max_react_steps` → `agent_reason` (continue reasoning)
+   - Otherwise → `forfeit`
+3. `execute_tools` executes tool calls directly and appends `ToolMessage`s to messages.
+4. Routing after `execute_tools`:
+   - If `submit_move` was among calls → `ground_truth`
+   - If `react_steps_taken < max_react_steps` → `agent_reason`
+   - Otherwise → `forfeit`
+5. `ground_truth` extracts the submitted UCI move and runs `parse_and_validate`.
+6. Valid → `accept`; invalid → `forfeit`.
+
+### State Fields
+
+- `react_steps_taken` — current step count (incremented by `agent_reason`)
+- `max_react_steps` — maximum allowed steps (default 6, set by `run_condition_f`)
+- `messages` — accumulates `SystemMessage`, `HumanMessage`, `AIMessage`, `ToolMessage`
+- `tool_calls` — log of all tool calls with args, step, and results
 
 ## Cross-Condition Retry and Validation Matrix
 

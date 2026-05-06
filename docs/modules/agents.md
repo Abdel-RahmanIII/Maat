@@ -60,20 +60,23 @@ explain_error(*, fen, proposed_move, error_type, error_reason, model_config) -> 
 
 Translates a symbolic validator error into pedagogical feedback.
 
-## ReAct Agent (`react_agent.py`)
+## ReAct Agent Helpers (`react_agent.py`)
 
 ```python
-run_react_loop(*, fen, move_history, input_mode, max_steps, model_config) -> dict
+build_react_messages(*, fen, move_history, input_mode) -> list[SystemMessage | HumanMessage]
+execute_tool_calls(tool_calls, tool_map) -> list[ToolMessage]
+extract_submit_from_text(text) -> str
 ```
 
-Returns `submitted_move`, `tool_calls_log`, `steps_taken`, token usage, and `forfeited` flag.
+These helpers are consumed by the Condition F LangGraph (`src/graph/condition_f.py`).
+The ReAct reasoning loop is implemented as a `StateGraph` with `agent_reason` → `execute_tools` → `ground_truth` nodes.
 
-The loop binds tools dynamically via `get_tools_for_input_mode(input_mode)`:
+Tools are bound dynamically via `get_tools_for_input_mode(input_mode)`:
 
 - `fen` mode: full tool catalog.
 - `history` mode: restricted safe subset.
 
-Tool calls are executed directly in the loop (not via `ToolNode`) to avoid runtime compatibility issues and to keep explicit per-call logging. `submit_move` is a sentinel tool that terminates the loop.
+Tool calls are executed directly (not via `ToolNode`) to avoid runtime compatibility issues and to keep explicit per-call logging. `submit_move` is a sentinel tool that terminates the loop.
 
 ## Strategist / Tactician (Planner-Actor Extension)
 

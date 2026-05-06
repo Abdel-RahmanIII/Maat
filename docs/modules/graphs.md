@@ -108,9 +108,9 @@ from src.graph.condition_f import run_condition_f
 
 Notes:
 
-- Conditions B-E also expose `build_graph(model_config)`.
-- Condition F is function-driven (`run_react_loop`) and does not expose a `StateGraph` builder.
-- Conditions A-E accept `generation_strategy`; condition F does not.
+- Conditions B-F expose `build_graph(model_config)`.
+- Condition F uses a `StateGraph` like B-E; its `build_graph` also takes `input_mode`.
+- Conditions A-E accept `generation_strategy`; condition F accepts `max_steps` instead.
 
 ## Minimal Example
 

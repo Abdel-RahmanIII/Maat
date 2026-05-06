@@ -1,7 +1,0 @@
-Classify the current game phase based on the position.
-
-{board_representation}
-
-Move history (UCI): {move_history}
-
-Respond with exactly one word: "opening", "middlegame", or "endgame"

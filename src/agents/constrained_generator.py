@@ -1,4 +1,4 @@
-"""Move generator agent — used by conditions A through E."""
+"""Constrained Generator — move selection in the Threat-Analyst MAS strategy."""
 
 from __future__ import annotations
 
@@ -12,22 +12,22 @@ from src.agents.base import (
     get_side_to_move,
     load_agent_prompt,
 )
-from src.llm.llm_client import get_model
 from src.config import ModelConfig
+from src.llm.llm_client import get_model
 from src.state import InputMode
 
 
-def generate_move(
+def generate_constrained_move(
     *,
     fen: str,
     move_history: list[str],
+    threat_report: str,
     feedback_history: list[str] | None = None,
     input_mode: InputMode = "fen",
     model_config: ModelConfig | None = None,
-    agent_id: str = "generator",
     conversation_history: list[Any] | None = None,
 ) -> dict[str, Any]:
-    """Call the LLM to generate a chess move.
+    """Generate a move constrained by the threat report.
 
     Returns a dict with ``raw_output``, ``prompt_tokens``,
     ``completion_tokens``, and ``turn_messages``.
@@ -39,13 +39,14 @@ def generate_move(
     feedback_block = format_feedback_block(feedback_history or [])
     history_str = " ".join(move_history) if move_history else "(none)"
 
-    system_text = load_agent_prompt(agent_id, input_mode, "system")
-    user_template = load_agent_prompt(agent_id, input_mode, "user")
+    system_text = load_agent_prompt("constrained_generator", input_mode, "system")
+    user_template = load_agent_prompt("constrained_generator", input_mode, "user")
     prompt_text = user_template.format(
         color=color,
         fen=fen,
         ascii_board=ascii_board,
         move_history=history_str,
+        threat_report=threat_report,
         feedback_block=feedback_block,
     )
 
@@ -58,10 +59,14 @@ def generate_move(
     messages.append(human_msg)
 
     response = model.invoke(messages)
-
     usage = response.usage_metadata or {}
+
     return {
-        "raw_output": response.content.strip() if isinstance(response.content, str) else str(response.content).strip(),
+        "raw_output": (
+            response.content.strip()
+            if isinstance(response.content, str)
+            else str(response.content).strip()
+        ),
         "prompt_tokens": usage.get("input_tokens", 0),
         "completion_tokens": usage.get("output_tokens", 0),
         "turn_messages": [human_msg, response],

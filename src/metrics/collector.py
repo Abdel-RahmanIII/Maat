@@ -120,9 +120,10 @@ def _build_turn_record(
             "ground_truth_verdict": state.get("ground_truth_verdict"),
             "generation_strategy": state.get("generation_strategy", "generator_only"),
             "strategic_plan": state.get("strategic_plan", ""),
-            "routed_phase": state.get("routed_phase", ""),
+            "threat_report": state.get("threat_report", ""),
             "feedback_history": list(state.get("feedback_history", [])),
             "board_fen": state.get("board_fen", ""),
+            "raw_llm_response": state.get("raw_llm_response", ""),
         }
 
     # Override timing / phase with collector-computed values

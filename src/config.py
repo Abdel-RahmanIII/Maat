@@ -20,7 +20,7 @@ class GenerationStrategy(str, Enum):
 
     GENERATOR_ONLY = "generator_only"
     PLANNER_ACTOR = "planner_actor"
-    ROUTER_SPECIALISTS = "router_specialists"
+    THREAT_ANALYST = "threat_analyst"
 
 
 class Condition(str, Enum):

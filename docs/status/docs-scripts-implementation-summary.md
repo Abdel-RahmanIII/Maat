@@ -188,9 +188,11 @@ Condition E (condition_e.py):
 
 Condition F (condition_f.py):
 
-- Runs run_react_loop() outside StateGraph (single orchestrating function).
-- If no submitted move within max_steps, forfeit with NO_OUTPUT.
-- If submitted move exists, parse_and_validate() performs final ground-truth legality check.
+- Uses a LangGraph StateGraph with nodes: agent_reason, execute_tools, extract_submit, ground_truth, accept, forfeit.
+- agent_reason invokes the tool-bound LLM and increments react_steps_taken.
+- execute_tools runs tool calls directly and appends ToolMessages to message history.
+- If no submitted move within max_react_steps, forfeit with NO_OUTPUT.
+- If submitted move exists, ground_truth runs parse_and_validate() for final legality check.
 - tool_calls from ReAct are persisted into TurnState.tool_calls and snapshot_turn_result.
 
 ### 2.10 Metrics package details

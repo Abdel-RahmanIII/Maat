@@ -1,0 +1,21 @@
+# ─── Maat Experiment Runner Configuration ─────────────────────────────────
+# All rate-limit values are configurable here — never hard-coded.
+
+# API rate limits
+rate_limits:
+  rpm: 15           # Requests per minute (sliding window)
+  rpd: 1500         # Requests per day (local calendar day)
+  tpm: null         # Tokens per minute — null = unlimited (track only)
+
+# Concurrency
+concurrency:
+  max_concurrent_per_condition: 5   # Parallel puzzles/games per condition
+
+# Server
+server:
+  host: "0.0.0.0"
+  port: 8420
+
+# Checkpoint
+checkpoint:
+  auto_save_interval_seconds: 30

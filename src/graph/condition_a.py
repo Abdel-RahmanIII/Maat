@@ -6,10 +6,12 @@ No retries.  Establishes the raw LLM capability floor.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from src.config import ModelConfig
-from src.graph.base_graph import parse_and_validate, run_generation, snapshot_turn_result
+from src.context import ConversationContext
+from src.graph.base_graph import snapshot_turn_result
+from src.graph.generation import build_generation_subgraph
 from src.state import InputMode, TurnState, create_initial_turn_state
 
 
@@ -22,12 +24,14 @@ def run_condition_a(
     input_mode: InputMode = "fen",
     generation_strategy: str = "generator_only",
     model_config: ModelConfig | None = None,
+    context: ConversationContext | None = None,
 ) -> TurnState:
     """Execute one turn under Condition A.
 
-    This is a plain function — no LangGraph graph.  It mirrors the
-    structure of conditions B–E for comparison but deliberately avoids
-    any framework overhead.
+    This invokes the generation subgraph directly — no parent LangGraph
+    wrapper.  It mirrors the structure of conditions B–E for comparison
+    but deliberately avoids framework overhead beyond the generation
+    subgraph itself.
     """
 
     state = create_initial_turn_state(
@@ -41,23 +45,12 @@ def run_condition_a(
     )
     state["generation_strategy"] = generation_strategy
 
-    # ── Generate ──
-    gen_result = run_generation(state, model_config)
+    # ── Run the generation subgraph ──
+    gen_subgraph = build_generation_subgraph(generation_strategy, model_config, context)
+    state = cast(TurnState, gen_subgraph.invoke(state))
 
-    state["llm_calls_this_turn"] = 1 + gen_result.get("extra_llm_calls", 0)
-    state["tokens_this_turn"] = gen_result["prompt_tokens"] + gen_result["completion_tokens"]
-    state["prompt_token_count"] = gen_result["prompt_tokens"]
-    state["total_attempts"] = 1
-
-    # ── Parse + validate ──
-    pv = parse_and_validate(gen_result["raw_output"], fen)
-
-    state["proposed_move"] = pv["proposed_move"]
-    state["is_valid"] = pv["is_valid"]
-    state["first_try_valid"] = pv["is_valid"]
-
-    if not pv["is_valid"]:
-        state["error_types"].append(pv["error_type"] or "UNKNOWN")
+    # ── Finalize ──
+    if not state["is_valid"]:
         state["game_status"] = "forfeit"
     else:
         state["game_status"] = "ongoing"

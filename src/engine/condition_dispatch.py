@@ -12,6 +12,7 @@ import time
 from typing import Any, cast
 
 from src.config import ModelConfig
+from src.context import ConversationContext
 from src.state import InputMode, TurnState
 
 logger = logging.getLogger(__name__)
@@ -60,6 +61,7 @@ def dispatch_turn(
     generation_strategy: str = "generator_only",
     model_config: ModelConfig | None = None,
     max_react_steps: int = 6,
+    context: ConversationContext | None = None,
 ) -> TurnState:
     """Route to the correct condition runner and return the final TurnState.
 
@@ -79,11 +81,13 @@ def dispatch_turn(
         ``"fen"`` (Exp 1 & 2) or ``"history"`` (Exp 3).
     generation_strategy:
         ``"generator_only"``, ``"planner_actor"``, or
-        ``"router_specialists"``.
+        ``"threat_analyst"``.
     model_config:
         LLM model configuration.
     max_react_steps:
         Maximum reasoning steps for Condition F.
+    context:
+        Optional :class:`ConversationContext` for multi-turn memory.
 
     Returns
     -------
@@ -94,8 +98,8 @@ def dispatch_turn(
     runner = cast(Any, _import_runner(condition))
     history = list(move_history or [])
 
-    # Condition F has a unique signature (max_steps instead of
-    # generation_strategy).
+    # Condition F uses a LangGraph StateGraph like B-E but takes
+    # max_steps instead of generation_strategy.
     if condition == "F":
         return runner(
             fen=fen,
@@ -105,6 +109,7 @@ def dispatch_turn(
             input_mode=input_mode,
             max_steps=max_react_steps,
             model_config=model_config,
+            context=context,
         )
 
     return runner(
@@ -115,6 +120,7 @@ def dispatch_turn(
         input_mode=input_mode,
         generation_strategy=generation_strategy,
         model_config=model_config,
+        context=context,
     )
 
 
@@ -135,6 +141,7 @@ def dispatch_turn_with_backoff(
     max_api_retries: int = 5,
     base_delay: float = 2.0,
     max_delay: float = 60.0,
+    context: ConversationContext | None = None,
 ) -> TurnState:
     """Like :func:`dispatch_turn` but with exponential backoff on API errors.
 
@@ -166,6 +173,7 @@ def dispatch_turn_with_backoff(
                 generation_strategy=generation_strategy,
                 model_config=model_config,
                 max_react_steps=max_react_steps,
+                context=context,
             )
         except Exception as exc:
             last_exc = exc

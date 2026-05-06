@@ -5,7 +5,7 @@ experiment: 1
 conditions: ["A", "B", "C", "D", "E", "F"]
 
 # Path to the JSONL file with puzzle inputs (relative to project root)
-puzzle_data: "src/data/Experiment 1/experiment_inputs.jsonl"
+puzzle_data: "data/Experiment 1/experiment_inputs.jsonl"
 
 # Output directory for results (JSONL, CSV, checkpoints)
 output_dir: "results/exp1"

@@ -14,7 +14,9 @@ from langgraph.graph.state import CompiledStateGraph
 
 from src.agents.critic import critique_move
 from src.config import ModelConfig
-from src.graph.base_graph import parse_and_validate, run_generation, snapshot_turn_result
+from src.context import ConversationContext
+from src.graph.base_graph import snapshot_turn_result
+from src.graph.generation import build_generation_subgraph
 from src.state import InputMode, TurnState, create_initial_turn_state
 from src.validators.symbolic import validate_move
 
@@ -24,39 +26,13 @@ from src.validators.symbolic import validate_move
 
 def build_graph(
     model_config: ModelConfig | None = None,
-) -> CompiledStateGraph[TurnState, None, TurnState, TurnState]:
+    generation_strategy: str = "generator_only",
+    context: ConversationContext | None = None,
+) -> CompiledStateGraph:
     """Build and return the compiled Condition C graph."""
 
     cfg = model_config
-
-    def _generate_node(state: TurnState) -> dict[str, Any]:
-        """Generate a move via the configured generation strategy."""
-
-        gen = run_generation(state, cfg)
-        pv = parse_and_validate(gen["raw_output"], state["board_fen"])
-
-        attempts = state["total_attempts"] + 1
-        llm_calls = state["llm_calls_this_turn"] + 1 + gen.get("extra_llm_calls", 0)
-        tokens = state["tokens_this_turn"] + gen["prompt_tokens"] + gen["completion_tokens"]
-
-        error_types = list(state["error_types"])
-
-        # If parse failed, record error now (critic can't evaluate unparseable output)
-        if not pv["is_valid"] and pv["error_type"]:
-            error_types.append(pv["error_type"])
-
-        return {
-            "proposed_move": pv["proposed_move"],
-            "is_valid": pv["is_valid"],
-            "first_try_valid": pv["is_valid"] if attempts == 1 else state["first_try_valid"],
-            "total_attempts": attempts,
-            "llm_calls_this_turn": llm_calls,
-            "tokens_this_turn": tokens,
-            "prompt_token_count": state["prompt_token_count"] + gen["prompt_tokens"],
-            "error_types": error_types,
-            "strategic_plan": gen.get("strategic_plan", ""),
-            "routed_phase": gen.get("routed_phase", ""),
-        }
+    gen_subgraph = build_generation_subgraph(generation_strategy, model_config, context)
 
     def _route_after_generate(state: TurnState) -> str:
         """If parse succeeded, go to critic; if parse failed, check retries."""
@@ -150,7 +126,7 @@ def build_graph(
 
     graph = StateGraph(TurnState)
 
-    graph.add_node("generate", _generate_node)
+    graph.add_node("generate", gen_subgraph)
     graph.add_node("critic", _critic_node)
     graph.add_node("retry_generate", _retry_node)
     graph.add_node("ground_truth", _ground_truth_node)
@@ -190,6 +166,7 @@ def run_condition_c(
     input_mode: InputMode = "fen",
     generation_strategy: str = "generator_only",
     model_config: ModelConfig | None = None,
+    context: ConversationContext | None = None,
 ) -> TurnState:
     """Execute one turn under Condition C."""
 
@@ -204,5 +181,5 @@ def run_condition_c(
     )
     state["generation_strategy"] = generation_strategy
 
-    compiled = build_graph(model_config)
+    compiled = build_graph(model_config, generation_strategy, context)
     return cast(TurnState, compiled.invoke(state))

@@ -402,35 +402,36 @@ def invoke_llm(role_id: str, params: dict[str, Any], template_override: str | No
     rendered = render_prompt(role_id, params, template_override)
 
     if is_react:
-        # For ReAct, run the full loop
-        from src.agents.react_agent import run_react_loop
+        # For ReAct, run the full Condition F LangGraph
+        from src.graph.condition_f import run_condition_f
         fen = params.get("fen", chess.STARTING_FEN)
         move_history_str = params.get("move_history", "")
         move_history = move_history_str.split() if move_history_str.strip() else []
 
         t0 = time.time()
-        react_result = run_react_loop(
+        state = run_condition_f(
             fen=fen, move_history=move_history, max_steps=4,
+            game_id="prompt-lab",
         )
         elapsed = time.time() - t0
 
         # Build tool calls text
         tool_log = []
-        for tc in react_result["tool_calls_log"]:
+        for tc in state.get("tool_calls", []):
             tool_log.append(f"Step {tc.get('step', '?')}: {tc['tool']}({json.dumps(tc['args'])})")
             if "result" in tc:
                 tool_log.append(f"  -> {tc['result'][:200]}")
 
         return {
             **rendered,
-            "raw_output": react_result["submitted_move"] or "(no move submitted)",
+            "raw_output": state.get("proposed_move") or "(no move submitted)",
             "tool_calls_text": "\n".join(tool_log),
-            "prompt_tokens": react_result["total_prompt_tokens"],
-            "completion_tokens": react_result["total_completion_tokens"],
+            "prompt_tokens": state.get("prompt_token_count", 0),
+            "completion_tokens": state.get("tokens_this_turn", 0) - state.get("prompt_token_count", 0),
             "elapsed_s": round(elapsed, 2),
-            "steps_taken": react_result["steps_taken"],
-            "forfeited": react_result["forfeited"],
-            "validation": _validate_output(react_result["submitted_move"], params.get("fen", chess.STARTING_FEN)),
+            "steps_taken": state.get("react_steps_taken", 0),
+            "forfeited": state.get("game_status") == "forfeit",
+            "validation": _validate_output(state.get("proposed_move", ""), params.get("fen", chess.STARTING_FEN)),
         }
 
     # Standard (non-ReAct) invocation

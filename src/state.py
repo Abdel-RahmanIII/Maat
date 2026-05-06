@@ -50,7 +50,17 @@ class TurnState(TypedDict):
     # Generation strategy metadata
     generation_strategy: str
     strategic_plan: str  # NL plan from strategist (planner_actor)
-    routed_phase: str  # Phase chosen by router (router_specialists)
+    threat_report: str  # Structured threat report (threat_analyst)
+
+    # Raw LLM output (full text response)
+    raw_llm_response: str
+
+    # ReAct-specific (Condition F)
+    react_steps_taken: int              # Current step count in ReAct loop
+    max_react_steps: int                # Maximum allowed reasoning steps
+
+    # Internal: raw output passed between generation subgraph nodes
+    _gen_raw_output: str
 
     # Game-level (accumulated)
     game_id: str
@@ -95,7 +105,11 @@ def create_initial_turn_state(
         "ground_truth_verdict": None,
         "generation_strategy": "generator_only",
         "strategic_plan": "",
-        "routed_phase": "",
+        "threat_report": "",
+        "raw_llm_response": "",
+        "react_steps_taken": 0,
+        "max_react_steps": 0,
+        "_gen_raw_output": "",
         "game_id": game_id,
         "condition": condition,
         "turn_results": [],

@@ -19,6 +19,7 @@ from typing import Any
 import chess
 
 from src.config import ModelConfig, config_for_condition
+from src.context import ConversationContext
 from src.engine.condition_dispatch import dispatch_turn_with_backoff
 from src.engine.result_store import (
     append_checkpoint,
@@ -267,6 +268,8 @@ class GameManager:
             starting_fen=starting_fen,
         )
 
+        context = ConversationContext()  # One per game
+
         game_status = "ongoing"
         half_moves_played = 0
 
@@ -286,6 +289,7 @@ class GameManager:
                     cond_cfg=cond_cfg,
                     collector=collector,
                     game_id=gid,
+                    context=context,
                 )
             else:
                 # ── Stockfish's turn ──
@@ -310,6 +314,7 @@ class GameManager:
         cond_cfg: Any,
         collector: MetricsCollector,
         game_id: str,
+        context: ConversationContext | None = None,
     ) -> str:
         """Execute one LLM turn.  Returns the updated game status."""
 
@@ -332,6 +337,7 @@ class GameManager:
             max_api_retries=self.max_api_retries,
             base_delay=self.backoff_base,
             max_delay=self.backoff_max,
+            context=context,
         )
 
         collector.end_turn(state)

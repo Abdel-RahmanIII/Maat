@@ -335,7 +335,7 @@ def test_offline() -> tuple[int, int]:
         build_board_representation,
         format_feedback_block,
         get_side_to_move,
-        load_prompt,
+        load_agent_prompt,
     )
 
     try:
@@ -370,19 +370,19 @@ def test_offline() -> tuple[int, int]:
         _fail("format_feedback_block", str(e))
         failed += 1
 
-    prompts_to_check = [
-        "generator.txt", "strategist.txt", "router.txt",
-        "critic.txt", "explainer.txt", "react.txt",
-        "opening_specialist.txt", "middlegame_specialist.txt", "endgame_specialist.txt",
+    agents_to_check = [
+        "generator", "strategist", "router",
+        "critic", "explainer", "react",
+        "opening_specialist", "middlegame_specialist", "endgame_specialist",
     ]
-    for p in prompts_to_check:
+    for agent_id in agents_to_check:
         try:
-            text = load_prompt(p)
+            text = load_agent_prompt(agent_id, "fen", "system")
             assert len(text) > 10
-            _pass(f"load_prompt({p})", f"len={len(text)}")
+            _pass(f"load_agent_prompt({agent_id})", f"len={len(text)}")
             passed += 1
         except Exception as e:
-            _fail(f"load_prompt({p})", str(e))
+            _fail(f"load_agent_prompt({agent_id})", str(e))
             failed += 1
 
     # ── 1f. parse_and_validate integration ───────────────────────────────
@@ -535,9 +535,9 @@ def test_roles() -> tuple[int, int]:
         t0 = time.time()
         result = explain_error(
             fen=STARTING_FEN,
-            proposed_move="e2e5",
+            attempted_move="e2e5",
             error_type="ILLEGAL_DESTINATION",
-            error_reason="Piece cannot move to the destination square.",
+            engine_error_message="Piece cannot move to the destination square.",
         )
         elapsed = time.time() - t0
         _pass("Explainer", f"explanation_len={len(result['explanation'])} | {elapsed:.1f}s")
@@ -598,34 +598,34 @@ def test_roles() -> tuple[int, int]:
             traceback.print_exc()
             failed += 1
 
-    # ── 2h. ReAct Agent ──────────────────────────────────────────────────
+    # ── 2h. ReAct Agent Helpers ───────────────────────────────────────────
 
-    _section("ReAct Agent (tool-using)")
+    _section("ReAct Agent Helpers (prompt builder + text-fallback)")
 
-    from src.agents.react_agent import run_react_loop
+    from src.agents.react_agent import build_react_messages, extract_submit_from_text
 
     try:
-        t0 = time.time()
-        result = run_react_loop(
+        msgs = build_react_messages(
             fen=STARTING_FEN,
             move_history=[],
-            max_steps=4,  # keep it short for smoke test
         )
-        elapsed = time.time() - t0
-        _pass(
-            "ReAct Agent",
-            f"move='{result['submitted_move']}' | "
-            f"steps={result['steps_taken']} | "
-            f"tools={len(result['tool_calls_log'])} | "
-            f"forfeited={result['forfeited']} | "
-            f"{elapsed:.1f}s"
-        )
-        if result["tool_calls_log"]:
-            for tc in result["tool_calls_log"]:
-                _info(f"  Tool call: {tc['tool']}({tc.get('args', {})})")
+        assert len(msgs) == 2
+        assert "chess" in msgs[0].content.lower() or "white" in msgs[0].content.lower()
+        _pass("build_react_messages", f"messages={len(msgs)}, sys_len={len(msgs[0].content)}")
         passed += 1
     except Exception as e:
-        _fail("ReAct Agent", str(e))
+        _fail("build_react_messages", str(e))
+        traceback.print_exc()
+        failed += 1
+
+    try:
+        assert extract_submit_from_text("SUBMIT:e2e4") == "e2e4"
+        assert extract_submit_from_text("MOVE: g1f3") == "g1f3"
+        assert extract_submit_from_text("I think we should play") == ""
+        _pass("extract_submit_from_text", "all cases passed")
+        passed += 1
+    except Exception as e:
+        _fail("extract_submit_from_text", str(e))
         traceback.print_exc()
         failed += 1
 

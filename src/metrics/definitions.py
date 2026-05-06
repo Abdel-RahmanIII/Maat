@@ -39,13 +39,16 @@ class TurnRecord(BaseModel):
     ground_truth_verdict: bool | None = None
     generation_strategy: str = "generator_only"
     strategic_plan: str = ""
-    routed_phase: str = ""
+    threat_report: str = ""
     feedback_history: list[str] = Field(default_factory=list)
 
     # Fields populated by the MetricsCollector
     wall_clock_ms: float = 0.0
     game_phase: str = ""
     board_fen: str = ""
+
+    # Raw model output text
+    raw_llm_response: str = ""
 
 
 # ── Per-game record ──────────────────────────────────────────────────────

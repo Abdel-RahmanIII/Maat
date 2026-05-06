@@ -7,6 +7,22 @@ import time
 from itertools import count
 from typing import TYPE_CHECKING, Any, Sequence
 
+# Rate limiter — imported lazily to avoid circular deps and
+# to stay backward-compatible when running without the runner.
+_rate_limiter = None
+
+
+def _get_limiter():
+    """Lazily fetch the global rate limiter (None if not configured)."""
+    global _rate_limiter
+    if _rate_limiter is None:
+        try:
+            from src.runner.rate_limiter import get_rate_limiter
+            _rate_limiter = get_rate_limiter()
+        except Exception:
+            pass
+    return _rate_limiter
+
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import Runnable
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -68,6 +84,11 @@ class LoggedModelRunnable(Runnable[Any, AIMessage]):
         self._has_tools = has_tools
 
     def invoke(self, input: Any, config: Any = None, **kwargs: Any) -> AIMessage:
+        # ── Rate-limit gate ──
+        limiter = _get_limiter()
+        if limiter:
+            limiter.acquire()
+
         call_id = next(_CALL_COUNTER)
         started = time.perf_counter()
         api_logger.info(
@@ -97,9 +118,23 @@ class LoggedModelRunnable(Runnable[Any, AIMessage]):
             elapsed_ms,
             _summarize_response(response),
         )
+
+        # ── Record token usage ──
+        if limiter:
+            usage = getattr(response, "usage_metadata", {}) or {}
+            limiter.record_tokens(
+                prompt_tokens=int(usage.get("input_tokens", 0) or 0),
+                completion_tokens=int(usage.get("output_tokens", 0) or 0),
+            )
+
         return response
 
     async def ainvoke(self, input: Any, config: Any = None, **kwargs: Any) -> AIMessage:
+        # ── Rate-limit gate ──
+        limiter = _get_limiter()
+        if limiter:
+            limiter.acquire()
+
         call_id = next(_CALL_COUNTER)
         started = time.perf_counter()
         api_logger.info(
@@ -129,6 +164,15 @@ class LoggedModelRunnable(Runnable[Any, AIMessage]):
             elapsed_ms,
             _summarize_response(response),
         )
+
+        # ── Record token usage ──
+        if limiter:
+            usage = getattr(response, "usage_metadata", {}) or {}
+            limiter.record_tokens(
+                prompt_tokens=int(usage.get("input_tokens", 0) or 0),
+                completion_tokens=int(usage.get("output_tokens", 0) or 0),
+            )
+
         return response
 
     def __getattr__(self, name: str) -> Any:

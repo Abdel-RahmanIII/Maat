@@ -13,7 +13,9 @@ from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from src.config import ModelConfig
-from src.graph.base_graph import parse_and_validate, run_generation, snapshot_turn_result
+from src.context import ConversationContext
+from src.graph.base_graph import snapshot_turn_result
+from src.graph.generation import build_generation_subgraph
 from src.state import InputMode, TurnState, create_initial_turn_state
 
 
@@ -22,39 +24,12 @@ from src.state import InputMode, TurnState, create_initial_turn_state
 
 def build_graph(
     model_config: ModelConfig | None = None,
-) -> CompiledStateGraph[TurnState, None, TurnState, TurnState]:
+    generation_strategy: str = "generator_only",
+    context: ConversationContext | None = None,
+) -> CompiledStateGraph:
     """Build and return the compiled Condition D graph."""
 
-    cfg = model_config
-
-    def _generate_node(state: TurnState) -> dict[str, Any]:
-        """Generate a move and run parse + symbolic validation."""
-
-        gen = run_generation(state, cfg)
-        pv = parse_and_validate(gen["raw_output"], state["board_fen"])
-
-        attempts = state["total_attempts"] + 1
-        llm_calls = state["llm_calls_this_turn"] + 1 + gen.get("extra_llm_calls", 0)
-        tokens = state["tokens_this_turn"] + gen["prompt_tokens"] + gen["completion_tokens"]
-
-        error_types = list(state["error_types"])
-        if not pv["is_valid"] and pv["error_type"]:
-            error_types.append(pv["error_type"])
-
-        return {
-            "proposed_move": pv["proposed_move"],
-            "is_valid": pv["is_valid"],
-            "first_try_valid": pv["is_valid"] if attempts == 1 else state["first_try_valid"],
-            "total_attempts": attempts,
-            "llm_calls_this_turn": llm_calls,
-            "tokens_this_turn": tokens,
-            "prompt_token_count": state["prompt_token_count"] + gen["prompt_tokens"],
-            "error_types": error_types,
-            "strategic_plan": gen.get("strategic_plan", ""),
-            "routed_phase": gen.get("routed_phase", ""),
-            # Stash error info for feedback construction
-            "_error_reason": pv["error_reason"] if not pv["is_valid"] else "",
-        }
+    gen_subgraph = build_generation_subgraph(generation_strategy, model_config, context)
 
     def _route_after_generate(state: TurnState) -> str:
         if state["is_valid"]:
@@ -66,11 +41,13 @@ def build_graph(
     def _terse_feedback_node(state: TurnState) -> dict[str, Any]:
         """Build a terse machine-generated feedback message and increment retries."""
 
-        error_reason = state.get("_error_reason", "Move is illegal.")
+        # Construct feedback from the error info captured by the subgraph
+        error_types = state.get("error_types", [])
+        last_error = error_types[-1] if error_types else "UNKNOWN"
 
         feedback = list(state["feedback_history"])
         feedback.append(
-            f"Illegal move {state['proposed_move']}: {error_reason}"
+            f"Illegal move {state['proposed_move']}: {last_error}"
         )
 
         return {
@@ -93,7 +70,7 @@ def build_graph(
 
     graph = StateGraph(TurnState)
 
-    graph.add_node("generate", _generate_node)
+    graph.add_node("generate", gen_subgraph)
     graph.add_node("terse_feedback", _terse_feedback_node)
     graph.add_node("accept", _accept_node)
     graph.add_node("forfeit", _forfeit_node)
@@ -121,6 +98,7 @@ def run_condition_d(
     input_mode: InputMode = "fen",
     generation_strategy: str = "generator_only",
     model_config: ModelConfig | None = None,
+    context: ConversationContext | None = None,
 ) -> TurnState:
     """Execute one turn under Condition D."""
 
@@ -135,5 +113,5 @@ def run_condition_d(
     )
     state["generation_strategy"] = generation_strategy
 
-    compiled = build_graph(model_config)
+    compiled = build_graph(model_config, generation_strategy, context)
     return cast(TurnState, compiled.invoke(state))

@@ -25,10 +25,12 @@ def execute_plan(
     feedback_history: list[str] | None = None,
     input_mode: InputMode = "fen",
     model_config: ModelConfig | None = None,
+    conversation_history: list[Any] | None = None,
 ) -> dict[str, Any]:
     """Convert a strategic plan into a concrete UCI move.
 
-    Returns a dict with ``raw_output``, ``prompt_tokens``, and ``completion_tokens``.
+    Returns a dict with ``raw_output``, ``prompt_tokens``,
+    ``completion_tokens``, and ``turn_messages``.
     """
 
     color = get_side_to_move(fen)
@@ -49,10 +51,12 @@ def execute_plan(
     )
 
     model = get_model(model_config)
-    messages = [
-        SystemMessage(content=system_text),
-        HumanMessage(content=prompt_text),
-    ]
+
+    messages: list[Any] = [SystemMessage(content=system_text)]
+    if conversation_history:
+        messages.extend(conversation_history)
+    human_msg = HumanMessage(content=prompt_text)
+    messages.append(human_msg)
 
     response = model.invoke(messages)
     usage = response.usage_metadata or {}
@@ -61,4 +65,5 @@ def execute_plan(
         "raw_output": response.content.strip() if isinstance(response.content, str) else str(response.content).strip(),
         "prompt_tokens": usage.get("input_tokens", 0),
         "completion_tokens": usage.get("output_tokens", 0),
+        "turn_messages": [human_msg, response],
     }

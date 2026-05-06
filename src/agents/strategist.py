@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TypedDict
+from typing import Any, TypedDict
 
 import chess
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -20,6 +20,7 @@ class StrategistResult(TypedDict):
     plan: str
     prompt_tokens: int
     completion_tokens: int
+    turn_messages: list[Any]
 
 
 def create_plan(
@@ -28,6 +29,7 @@ def create_plan(
     move_history: list[str],
     input_mode: InputMode = "fen",
     model_config: ModelConfig | None = None,
+    conversation_history: list[Any] | None = None,
 ) -> StrategistResult:
     """Generate a natural-language strategic plan for the current position.
 
@@ -51,10 +53,12 @@ def create_plan(
     )
 
     model = get_model(model_config)
-    messages = [
-        SystemMessage(content=system_text),
-        HumanMessage(content=prompt_text),
-    ]
+
+    messages: list[Any] = [SystemMessage(content=system_text)]
+    if conversation_history:
+        messages.extend(conversation_history)
+    human_msg = HumanMessage(content=prompt_text)
+    messages.append(human_msg)
 
     response = model.invoke(messages)
     raw = response.content.strip() if isinstance(response.content, str) else str(response.content).strip()
@@ -64,4 +68,5 @@ def create_plan(
         "plan": raw,
         "prompt_tokens": usage.get("input_tokens", 0),
         "completion_tokens": usage.get("output_tokens", 0),
+        "turn_messages": [human_msg, response],
     }

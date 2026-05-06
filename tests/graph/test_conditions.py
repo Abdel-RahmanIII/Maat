@@ -73,7 +73,7 @@ class TestSnapshotTurnResult:
 
 class TestConditionA:
 
-    @patch("src.graph.base_graph.generate_move")
+    @patch("src.graph.generation.generator_only.generate_move")
     def test_valid_move_accepted(self, mock_gen: MagicMock) -> None:
         mock_gen.return_value = {
             "raw_output": "e2e4",
@@ -93,7 +93,7 @@ class TestConditionA:
         assert result["game_status"] == "ongoing"
         assert result["total_attempts"] == 1
 
-    @patch("src.graph.base_graph.generate_move")
+    @patch("src.graph.generation.generator_only.generate_move")
     def test_illegal_move_forfeits(self, mock_gen: MagicMock) -> None:
         mock_gen.return_value = {
             "raw_output": "e2e5",
@@ -118,7 +118,7 @@ class TestConditionA:
 
 class TestConditionB:
 
-    @patch("src.graph.base_graph.generate_move")
+    @patch("src.graph.generation.generator_only.generate_move")
     def test_valid_move_accepted(self, mock_gen: MagicMock) -> None:
         mock_gen.return_value = {
             "raw_output": "e2e4",
@@ -136,7 +136,7 @@ class TestConditionB:
         assert result["is_valid"] is True
         assert result["game_status"] == "ongoing"
 
-    @patch("src.graph.base_graph.generate_move")
+    @patch("src.graph.generation.generator_only.generate_move")
     def test_illegal_move_forfeits_no_retry(self, mock_gen: MagicMock) -> None:
         mock_gen.return_value = {
             "raw_output": "e2e5",
@@ -162,7 +162,7 @@ class TestConditionB:
 
 class TestConditionD:
 
-    @patch("src.graph.base_graph.generate_move")
+    @patch("src.graph.generation.generator_only.generate_move")
     def test_valid_on_first_try(self, mock_gen: MagicMock) -> None:
         mock_gen.return_value = {
             "raw_output": "e2e4",
@@ -180,7 +180,7 @@ class TestConditionD:
         assert result["is_valid"] is True
         assert result["game_status"] == "ongoing"
 
-    @patch("src.graph.base_graph.generate_move")
+    @patch("src.graph.generation.generator_only.generate_move")
     def test_retries_then_succeeds(self, mock_gen: MagicMock) -> None:
         """First attempt illegal, second attempt legal."""
         mock_gen.side_effect = [
@@ -200,7 +200,7 @@ class TestConditionD:
         assert result["total_attempts"] == 2
         assert result["retry_count"] == 1
 
-    @patch("src.graph.base_graph.generate_move")
+    @patch("src.graph.generation.generator_only.generate_move")
     def test_exhausts_retries_then_forfeits(self, mock_gen: MagicMock) -> None:
         """All 4 attempts (1 initial + 3 retries) are illegal."""
         mock_gen.return_value = {
