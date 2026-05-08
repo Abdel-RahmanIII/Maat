@@ -1,11 +1,18 @@
-"""FastAPI server for the Maat experiment runner.
+"""FastAPI application for the Maat experiment runner.
 
-Provides REST endpoints for controlling experiments and a WebSocket
-for real-time dashboard updates.
+This module is the primary *entrypoint* for the runner server:
 
-Usage::
+- `create_app()` builds the FastAPI app used by Uvicorn.
+- `main()` runs Uvicorn and serves the dashboard.
 
-    python -m src.runner.server
+The API is intentionally thin: it delegates experiment execution to
+`src.runner.core.orchestrator.Orchestrator`.
+
+Contract note
+-------------
+The dashboard HTML and JS (see `src/runner/dashboard.html`) expects stable
+route paths and specific WebSocket event types. This module preserves that
+contract.
 """
 
 from __future__ import annotations
@@ -13,96 +20,42 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 import sys
-import threading
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 import uvicorn
 import yaml
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
-from src.runner.orchestrator import Orchestrator
-from src.runner.rate_limiter import get_rate_limiter
+from src.runner.api.ws import ConnectionManager
+from src.runner.core.orchestrator import Orchestrator
+from src.runner.limiting.rate_limiter import get_rate_limiter
+from src.runner.paths import dashboard_path, project_root, runner_config_path
 
 logger = logging.getLogger(__name__)
-
-# ── Project root ─────────────────────────────────────────────────────────
-
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-_DASHBOARD_PATH = Path(__file__).resolve().parent / "dashboard.html"
-_RUNNER_CONFIG = _PROJECT_ROOT / "configs" / "runner.yaml"
-
-
-# ── Load runner config ───────────────────────────────────────────────────
 
 
 def _load_runner_config() -> dict[str, Any]:
     """Load configs/runner.yaml, returning defaults if missing."""
 
-    if _RUNNER_CONFIG.exists():
-        with _RUNNER_CONFIG.open("r", encoding="utf-8") as fh:
+    path = runner_config_path()
+    if path.exists():
+        with path.open("r", encoding="utf-8") as fh:
             return yaml.safe_load(fh) or {}
     return {}
 
 
-# ── WebSocket connection manager ─────────────────────────────────────────
-
-
-class ConnectionManager:
-    """Manages active WebSocket connections."""
-
-    def __init__(self) -> None:
-        self._connections: list[WebSocket] = []
-        self._lock = threading.Lock()
-
-    async def connect(self, ws: WebSocket) -> None:
-        await ws.accept()
-        with self._lock:
-            self._connections.append(ws)
-
-    def disconnect(self, ws: WebSocket) -> None:
-        with self._lock:
-            if ws in self._connections:
-                self._connections.remove(ws)
-
-    def broadcast_sync(self, data: dict[str, Any]) -> None:
-        """Broadcast from a non-async context (worker threads)."""
-        with self._lock:
-            dead: list[WebSocket] = []
-            for ws in self._connections:
-                try:
-                    # Queue a send in the event loop
-                    asyncio.run_coroutine_threadsafe(
-                        ws.send_json(data),
-                        _event_loop,
-                    )
-                except Exception:
-                    dead.append(ws)
-            for ws in dead:
-                self._connections.remove(ws)
-
-
 _manager = ConnectionManager()
-_event_loop: asyncio.AbstractEventLoop | None = None
-
-
-# ── Lifespan ─────────────────────────────────────────────────────────────
 
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    global _event_loop
-    _event_loop = asyncio.get_event_loop()
+    # Capture the app event loop so worker threads can broadcast.
+    _manager.set_event_loop(asyncio.get_event_loop())
     yield
-
-
-# ── Create app ───────────────────────────────────────────────────────────
 
 
 def create_app() -> FastAPI:
@@ -125,7 +78,7 @@ def create_app() -> FastAPI:
         rpm=rate_cfg.get("rpm", 15),
         rpd=rate_cfg.get("rpd", 1500),
         tpm=rate_cfg.get("tpm"),
-        project_root=_PROJECT_ROOT,
+        project_root=project_root(),
     )
 
     # Create orchestrator
@@ -136,7 +89,7 @@ def create_app() -> FastAPI:
         on_event=_manager.broadcast_sync,
     )
 
-    # Store in app state for access in endpoints
+    # Store in app state
     app.state.orchestrator = orchestrator
     app.state.limiter = limiter
 
@@ -144,7 +97,7 @@ def create_app() -> FastAPI:
 
     @app.get("/", response_class=HTMLResponse)
     async def dashboard() -> HTMLResponse:
-        html = _DASHBOARD_PATH.read_text(encoding="utf-8")
+        html = dashboard_path().read_text(encoding="utf-8")
         return HTMLResponse(html)
 
     # ── REST API ─────────────────────────────────────────────────────
@@ -168,15 +121,14 @@ def create_app() -> FastAPI:
                 "generation_strategy": "generator_only"
             }
         """
+
         try:
             experiments = body.get("experiments", [])
             parallel = body.get("parallel_experiments", False)
             gen_strategy = body.get("generation_strategy", "generator_only")
 
             if not experiments:
-                return JSONResponse(
-                    {"error": "No experiments specified"}, status_code=400
-                )
+                return JSONResponse({"error": "No experiments specified"}, status_code=400)
 
             orchestrator.start(
                 experiments,
@@ -213,8 +165,9 @@ def create_app() -> FastAPI:
         Always returns all 6 conditions (A-F) for every experiment
         so the user can freely choose any combination from the UI.
         """
+
         _ALL_CONDITIONS = ["A", "B", "C", "D", "E", "F"]
-        configs_dir = _PROJECT_ROOT / "configs"
+        configs_dir = project_root() / "configs"
         experiments = []
         for i in (1, 2, 3):
             path = configs_dir / f"experiment_{i}.yaml"
@@ -228,19 +181,22 @@ def create_app() -> FastAPI:
 
     @app.get("/api/config")
     async def get_config() -> JSONResponse:
-        """Return current runner configuration."""
         return JSONResponse(runner_cfg)
 
     @app.post("/api/config")
     async def update_config(body: dict[str, Any]) -> JSONResponse:
-        """Update runner configuration at runtime."""
+        """Update runner configuration at runtime.
+
+        Only rate limits are applied dynamically.
+        """
+
         if "rate_limits" in body:
             rl = body["rate_limits"]
             limiter.configure(
                 rpm=rl.get("rpm", rate_cfg.get("rpm", 15)),
                 rpd=rl.get("rpd", rate_cfg.get("rpd", 1500)),
                 tpm=rl.get("tpm", rate_cfg.get("tpm")),
-                project_root=_PROJECT_ROOT,
+                project_root=project_root(),
             )
         return JSONResponse({"status": "updated"})
 
@@ -250,22 +206,21 @@ def create_app() -> FastAPI:
     async def websocket_endpoint(ws: WebSocket) -> None:
         await _manager.connect(ws)
         try:
-            # Send initial status
+            # Initial full status snapshot
             await ws.send_json({
                 "type": "initial_status",
                 **orchestrator.get_full_status(),
             })
 
-            # Keep alive — read messages (for future interactive commands)
+            # Keep alive — read messages (future interactive control)
             while True:
                 try:
                     data = await asyncio.wait_for(ws.receive_text(), timeout=30)
-                    # Handle client messages if needed
                     msg = json.loads(data)
                     if msg.get("type") == "ping":
                         await ws.send_json({"type": "pong"})
                 except asyncio.TimeoutError:
-                    # Send periodic status updates
+                    # Periodic status updates
                     try:
                         await ws.send_json({
                             "type": "status_update",
@@ -284,7 +239,6 @@ def create_app() -> FastAPI:
 
 
 def _experiment_description(exp_id: int) -> str:
-    """Return a human-readable description for each experiment."""
     return {
         1: "Isolated Position Evaluation (Puzzles)",
         2: "Full Games with Board State (FEN)",
@@ -292,28 +246,23 @@ def _experiment_description(exp_id: int) -> str:
     }.get(exp_id, f"Experiment {exp_id}")
 
 
-# ── Entry point ──────────────────────────────────────────────────────────
-
-
 def main() -> None:
-    """Run the server."""
+    """Run the server via Uvicorn."""
 
-    # Ensure project root is on sys.path
-    project_root = str(_PROJECT_ROOT)
-    if project_root not in sys.path:
-        sys.path.insert(0, project_root)
+    # Ensure project root is on sys.path (helps when invoked from odd CWDs)
+    root = str(project_root())
+    if root not in sys.path:
+        sys.path.insert(0, root)
 
-    # Configure logging
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s | %(name)s | %(levelname)s | %(message)s",
     )
 
-    # Load config for server settings
     runner_cfg = _load_runner_config()
     server_cfg = runner_cfg.get("server", {})
 
-    host = server_cfg.get("host", "0.0.0.0")
+    host = server_cfg.get("host", "localhost")
     port = server_cfg.get("port", 8420)
 
     app = create_app()

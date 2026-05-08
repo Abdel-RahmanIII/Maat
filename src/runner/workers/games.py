@@ -1,20 +1,25 @@
-"""Puzzle and game worker functions for the experiment runner.
+"""Game worker (Experiments 2 & 3).
 
-Workers run inside a ``ThreadPoolExecutor`` managed by the
-:class:`~src.runner.orchestrator.Orchestrator`.  Each worker processes
-one puzzle (Exp 1) or one full game (Exp 2/3), calling into the
-existing condition dispatch system.
+A game worker plays exactly one full game:
 
-All LLM calls go through the rate-limited ``llm_client``, so workers
-naturally block when the RPM/RPD budget is exhausted.
+- White is the LLM condition dispatcher.
+- Black is Stockfish.
+
+The worker supports turn-level checkpointing for resumability:
+
+- If `.game_state/{game_id}.json` exists and status is `ongoing`, resume from it.
+- After every White (LLM) turn, persist the mid-game state.
+- On completion, write the final JSONL record and delete the state file.
+
+This module is part of the runner's *data plane*.
 """
 
 from __future__ import annotations
 
 import logging
 import threading
-import time
 import traceback
+from pathlib import Path
 from typing import Any, Callable
 
 import chess
@@ -22,141 +27,16 @@ import chess
 from src.config import ModelConfig, config_for_condition
 from src.context import ConversationContext
 from src.engine.condition_dispatch import dispatch_turn_with_backoff
-from src.engine.result_store import (
-    append_checkpoint,
-    append_game_record,
-)
+from src.engine.result_store import append_checkpoint, append_game_record
 from src.engine.stockfish_wrapper import StockfishWrapper
 from src.metrics.collector import MetricsCollector
 from src.metrics.definitions import GameRecord, TurnRecord
-from src.runner.checkpoint import (
-    delete_game_state,
-    load_game_state,
-    save_game_state,
-)
+from src.runner.persistence.checkpoint import delete_game_state, load_game_state, save_game_state
 from src.state import InputMode
 
 logger = logging.getLogger(__name__)
 
-# Type alias for progress callbacks
 ProgressCallback = Callable[[dict[str, Any]], None]
-
-
-# ── Puzzle worker (Experiment 1) ─────────────────────────────────────────
-
-
-def run_puzzle_worker(
-    puzzle: dict[str, Any],
-    condition: str,
-    game_id: str,
-    output_dir: Any,
-    *,
-    model_config: ModelConfig | None = None,
-    generation_strategy: str = "generator_only",
-    max_api_retries: int = 5,
-    backoff_base: float = 2.0,
-    backoff_max: float = 60.0,
-    pause_event: threading.Event | None = None,
-    stop_event: threading.Event | None = None,
-    on_progress: ProgressCallback | None = None,
-) -> GameRecord | None:
-    """Evaluate a single puzzle under a condition.
-
-    Returns the ``GameRecord`` on success, or ``None`` if stopped/failed.
-    """
-
-    # ── Check stop/pause ──
-    if stop_event and stop_event.is_set():
-        return None
-    if pause_event:
-        pause_event.wait()  # blocks if paused
-
-    fen = puzzle["fen"]
-    cond_cfg = config_for_condition(condition)
-
-    collector = MetricsCollector(
-        game_id=game_id,
-        condition=condition,
-        experiment=1,
-        input_mode="fen",
-        starting_fen=fen,
-    )
-
-    try:
-        _emit(on_progress, {
-            "type": "worker_status",
-            "game_id": game_id,
-            "condition": condition,
-            "experiment": 1,
-            "status": "running",
-            "detail": f"Puzzle {puzzle.get('puzzle_id', '?')}",
-        })
-
-        collector.start_turn()
-
-        context = ConversationContext()  # One per puzzle
-
-        state = dispatch_turn_with_backoff(
-            condition,
-            fen=fen,
-            move_history=[],
-            move_number=1,
-            game_id=game_id,
-            input_mode="fen",
-            generation_strategy=generation_strategy,
-            model_config=model_config,
-            max_react_steps=cond_cfg.max_react_steps,
-            max_api_retries=max_api_retries,
-            base_delay=backoff_base,
-            max_delay=backoff_max,
-            context=context,
-        )
-
-        collector.end_turn(state)
-
-        final_status = state.get("game_status", "ongoing")
-        if final_status == "ongoing":
-            final_status = "completed"
-
-        record = collector.finalize_game(
-            final_status=final_status,
-            starting_fen=fen,
-        )
-
-        # Persist
-        from pathlib import Path
-
-        results_path = Path(output_dir) / f"exp1_{condition}_results.jsonl"
-        append_game_record(record, results_path)
-        append_checkpoint(game_id, Path(output_dir) / ".checkpoint")
-
-        _emit(on_progress, {
-            "type": "puzzle_complete",
-            "game_id": game_id,
-            "condition": condition,
-            "experiment": 1,
-            "status": final_status,
-            "is_valid": state.get("is_valid", False),
-            "proposed_move": state.get("proposed_move", ""),
-            "raw_llm_response": state.get("raw_llm_response", ""),
-        })
-
-        return record
-
-    except Exception as exc:
-        logger.exception("Puzzle worker error on %s", game_id)
-        _emit(on_progress, {
-            "type": "worker_error",
-            "game_id": game_id,
-            "condition": condition,
-            "experiment": 1,
-            "error": str(exc),
-            "traceback": traceback.format_exc(),
-        })
-        return None
-
-
-# ── Game worker (Experiments 2 & 3) ──────────────────────────────────────
 
 
 def run_game_worker(
@@ -181,10 +61,8 @@ def run_game_worker(
 ) -> GameRecord | None:
     """Play one full game with turn-level checkpointing.
 
-    Returns the ``GameRecord`` on success, or ``None`` if stopped/failed.
+    Returns the `GameRecord` on success, or None if stopped/failed.
     """
-
-    from pathlib import Path
 
     output_path = Path(output_dir)
     cond_cfg = config_for_condition(condition)
@@ -197,14 +75,8 @@ def run_game_worker(
         for uci in saved["move_stack_uci"]:
             board.push(chess.Move.from_uci(uci))
         half_moves_played = saved["half_moves_played"]
-        existing_turn_records = [
-            TurnRecord.model_validate(t) for t in saved["turn_records"]
-        ]
-        logger.info(
-            "Resuming game %s from half-move %d",
-            game_id,
-            half_moves_played,
-        )
+        existing_turn_records = [TurnRecord.model_validate(t) for t in saved["turn_records"]]
+        logger.info("Resuming game %s from half-move %d", game_id, half_moves_played)
     else:
         board = chess.Board(starting_fen)
         half_moves_played = 0
@@ -222,9 +94,10 @@ def run_game_worker(
 
     game_status = "ongoing"
 
-    context = ConversationContext()  # One per game
+    # One conversation context per game
+    context = ConversationContext()
 
-    # Per-game Stockfish instance (not thread-safe, so each worker gets one)
+    # Per-game Stockfish instance (not thread-safe)
     sf = StockfishWrapper(engine_path=stockfish_path, elo=stockfish_elo)
 
     try:
@@ -259,7 +132,6 @@ def run_game_worker(
                 return None
 
             if pause_event and not pause_event.is_set():
-                # Save state before blocking on pause
                 _save_mid_game(
                     output_path, game_id, condition, experiment,
                     starting_fen, board, half_moves_played,
@@ -274,7 +146,7 @@ def run_game_worker(
                     "status": "paused",
                     "detail": f"Paused at half-move {half_moves_played}",
                 })
-                pause_event.wait()  # blocks until resumed
+                pause_event.wait()
 
             # ── Half-move cap ──
             if half_moves_played >= max_half_moves:
@@ -308,7 +180,7 @@ def run_game_worker(
 
             half_moves_played += 1
 
-            # Check termination
+            # Natural termination
             if game_status == "ongoing":
                 game_status = _check_termination(board)
 
@@ -344,10 +216,7 @@ def run_game_worker(
             })
 
         # ── Finalize ──
-        record = collector.finalize_game(
-            final_status=game_status,
-            starting_fen=starting_fen,
-        )
+        record = collector.finalize_game(final_status=game_status, starting_fen=starting_fen)
 
         results_path = output_path / f"exp{experiment}_{condition}_results.jsonl"
         append_game_record(record, results_path)
@@ -367,7 +236,6 @@ def run_game_worker(
 
     except Exception as exc:
         logger.exception("Game worker error on %s", game_id)
-        # Save whatever progress we have
         _save_mid_game(
             output_path, game_id, condition, experiment,
             starting_fen, board, half_moves_played,
@@ -406,7 +274,7 @@ def _llm_turn(
     experiment: int,
     context: ConversationContext | None = None,
 ) -> str:
-    """Execute one LLM move.  Returns the updated game status."""
+    """Execute one LLM move. Returns the updated game status."""
 
     fen = board.fen()
     move_history = [m.uci() for m in board.move_stack]
@@ -478,8 +346,6 @@ def _save_mid_game(
     generation_strategy: str,
 ) -> None:
     """Save current game state for resume."""
-
-    from pathlib import Path
 
     save_game_state(
         Path(output_dir),

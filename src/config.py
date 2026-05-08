@@ -39,7 +39,7 @@ class ModelConfig:
     """LLM model configuration."""
 
     model_name: str = "gemma-4-31b-it"
-    temperature: float = 0.0
+    temperature: float = 0.0001
     max_output_tokens: int = 1024
     api_key: str = field(default_factory=lambda: os.environ.get("GOOGLE_API_KEY", ""))
 

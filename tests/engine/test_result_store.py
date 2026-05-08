@@ -8,6 +8,7 @@ from src.engine.result_store import (
     append_checkpoint,
     append_game_record,
     load_checkpoint,
+    load_completed_game_ids,
     load_game_records,
     write_summary_csv,
 )
@@ -60,6 +61,53 @@ def test_checkpointing(tmp_path: Path):
     
     completed = load_checkpoint(cp)
     assert completed == {"g1", "g2"}
+
+
+def test_load_completed_game_ids_merges_results_and_checkpoint(tmp_path: Path):
+    tr = TurnRecord(
+        move_number=1,
+        proposed_move="e2e4",
+        is_valid=True,
+        first_try_valid=True,
+        total_attempts=1,
+        llm_calls_this_turn=1,
+        tokens_this_turn=100,
+        prompt_token_count=50,
+        wall_clock_ms=123.4,
+        game_phase="opening",
+        board_fen="rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1",
+    )
+    gr1 = GameRecord(
+        game_id="test_001",
+        condition="A",
+        experiment=1,
+        turns=[tr],
+        final_status="completed",
+        total_turns=1,
+        total_llm_calls=1,
+        total_tokens=100,
+        starting_fen="fen_1",
+    )
+    gr2 = GameRecord(
+        game_id="test_002",
+        condition="A",
+        experiment=1,
+        turns=[tr],
+        final_status="completed",
+        total_turns=1,
+        total_llm_calls=1,
+        total_tokens=100,
+        starting_fen="fen_2",
+    )
+
+    results_path = tmp_path / "results.jsonl"
+    cp = tmp_path / "ckpt.txt"
+    append_game_record(gr1, results_path)
+    append_checkpoint("test_002", cp)
+
+    completed = load_completed_game_ids(results_path, cp)
+    assert completed == {"test_001", "test_002"}
+
 
 def test_write_summary_csv(tmp_path: Path):
     gr = GameRecord(

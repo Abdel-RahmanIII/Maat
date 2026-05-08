@@ -57,6 +57,19 @@ def load_game_records(filepath: Path) -> list[GameRecord]:
     return records
 
 
+def load_completed_game_ids(results_path: Path, checkpoint_path: Path | None = None) -> set[str]:
+    """Return completed game IDs from persisted results and optional checkpoint.
+
+    The JSONL results file is treated as the source of truth, with the
+    checkpoint used as a fallback/merge source for interrupted runs.
+    """
+
+    completed = {record.game_id for record in load_game_records(results_path)}
+    if checkpoint_path is not None:
+        completed.update(load_checkpoint(checkpoint_path))
+    return completed
+
+
 # ── Checkpoint management ────────────────────────────────────────────────
 
 

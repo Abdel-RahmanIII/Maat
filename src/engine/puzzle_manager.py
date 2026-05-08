@@ -20,7 +20,7 @@ from src.engine.condition_dispatch import dispatch_turn_with_backoff
 from src.engine.result_store import (
     append_checkpoint,
     append_game_record,
-    load_checkpoint,
+    load_completed_game_ids,
     load_game_records,
     write_summary_csv,
 )
@@ -109,13 +109,14 @@ class PuzzleManager:
         """
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        completed = load_checkpoint(self._checkpoint_path)
         all_records: list[GameRecord] = []
 
         total_pairs = len(self.puzzles) * len(self.conditions)
         done_count = 0
 
         for condition in self.conditions:
+            results_path = self.output_dir / f"exp1_{condition}_results.jsonl"
+            completed = load_completed_game_ids(results_path, self._checkpoint_path)
             cond_records = self._run_condition(condition, completed)
             all_records.extend(cond_records)
             done_count += len(cond_records)
@@ -138,7 +139,8 @@ class PuzzleManager:
         """Evaluate all puzzles under a single condition."""
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        completed = load_checkpoint(self._checkpoint_path)
+        results_path = self.output_dir / f"exp1_{condition.upper()}_results.jsonl"
+        completed = load_completed_game_ids(results_path, self._checkpoint_path)
         return self._run_condition(condition.upper(), completed)
 
     def run_single(

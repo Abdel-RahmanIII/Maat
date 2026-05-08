@@ -1,28 +1,17 @@
 """Thread-safe global API rate limiter.
 
-Enforces RPM (requests per minute) and RPD (requests per day) limits
-across all worker threads.  TPM (tokens per minute) is tracked but
-never blocks.
+Enforces RPM (requests per minute) and RPD (requests per day) limits across all
+worker threads. TPM (tokens per minute) is tracked but never blocks.
 
 Blocking behaviour
 ------------------
-- **RPM full** → caller blocks until the oldest request exits the
-  60-second sliding window.
-- **RPD reached** → caller blocks until midnight local time (next day).
-- No fail-fast, no exceptions — pure hard block.
+- RPM full → caller blocks until the oldest request exits the 60s window.
+- RPD reached → caller blocks until midnight local time.
 
-Usage::
+No fail-fast and no exceptions: callers simply block.
 
-    from src.runner.rate_limiter import get_rate_limiter
-
-    limiter = get_rate_limiter()
-    limiter.configure(rpm=15, rpd=1500)
-
-    # Before every LLM call:
-    limiter.acquire()          # blocks if necessary
-
-    # After every LLM call:
-    limiter.record_tokens(prompt_tokens=800, completion_tokens=200)
+This module is intentionally independent from FastAPI: it can be used in
+headless runs or tests that still want deterministic throttling.
 """
 
 from __future__ import annotations
@@ -51,7 +40,7 @@ class RateLimiter:
         # Limits (set via configure)
         self._rpm: int = 15
         self._rpd: int = 1500
-        self._tpm: int | None = None  # None = unlimited
+        self._tpm: int | None = None
 
         # Sliding-window timestamps for RPM
         self._rpm_window: deque[float] = deque()
@@ -72,7 +61,7 @@ class RateLimiter:
         # Persistence path (relative to project root)
         self._rpd_state_path: Path | None = None
 
-        # Callbacks for real-time dashboard updates
+        # Optional callbacks for real-time dashboard updates
         self._on_status_change: list[Any] = []
 
     # ── Configuration ────────────────────────────────────────────────
@@ -85,7 +74,7 @@ class RateLimiter:
         tpm: int | None = None,
         project_root: Path | str | None = None,
     ) -> None:
-        """Set rate limits.  Call once before starting workers."""
+        """Set rate limits. Call once before starting workers."""
 
         with self._lock:
             self._rpm = rpm
@@ -96,15 +85,11 @@ class RateLimiter:
                 self._rpd_state_path = Path(project_root) / _RPD_STATE_FILE
                 self._load_rpd_state()
 
-        logger.info(
-            "Rate limiter configured: RPM=%d, RPD=%d, TPM=%s",
-            rpm,
-            rpd,
-            tpm or "unlimited",
-        )
+        logger.info("Rate limiter configured: RPM=%d, RPD=%d, TPM=%s", rpm, rpd, tpm or "unlimited")
 
     def on_status_change(self, callback: Any) -> None:
-        """Register a callback for status changes (for WebSocket push)."""
+        """Register a callback for status changes."""
+
         self._on_status_change.append(callback)
 
     # ── Core API ─────────────────────────────────────────────────────
@@ -118,9 +103,8 @@ class RateLimiter:
         start = time.monotonic()
 
         with self._condition:
-            # ── RPD check ──
+            # RPD
             self._rotate_day()
-
             while self._rpd_count >= self._rpd:
                 self._total_blocks_rpd += 1
                 wait_secs = self._seconds_until_midnight()
@@ -131,14 +115,12 @@ class RateLimiter:
                     wait_secs,
                 )
                 self._notify_status()
-                # Release lock while sleeping, re-acquire on wake
                 self._condition.wait(timeout=wait_secs + 1)
                 self._rotate_day()
 
-            # ── RPM check ──
+            # RPM
             now = time.time()
             self._prune_rpm_window(now)
-
             while len(self._rpm_window) >= self._rpm:
                 self._total_blocks_rpm += 1
                 oldest = self._rpm_window[0]
@@ -155,27 +137,21 @@ class RateLimiter:
                 self._prune_rpm_window(now)
                 self._rotate_day()
 
-                # Re-check RPD after waking (day may have rolled over)
                 while self._rpd_count >= self._rpd:
                     wait_rpd = self._seconds_until_midnight()
                     self._condition.wait(timeout=wait_rpd + 1)
                     self._rotate_day()
 
-            # ── Record the request ──
+            # Record
             self._rpm_window.append(time.time())
             self._rpd_count += 1
             self._total_requests += 1
             self._save_rpd_state()
             self._notify_status()
 
-        waited = time.monotonic() - start
-        return waited
+        return time.monotonic() - start
 
-    def record_tokens(
-        self,
-        prompt_tokens: int = 0,
-        completion_tokens: int = 0,
-    ) -> None:
+    def record_tokens(self, prompt_tokens: int = 0, completion_tokens: int = 0) -> None:
         """Record token usage after an API call (non-blocking)."""
 
         total = prompt_tokens + completion_tokens
@@ -184,12 +160,11 @@ class RateLimiter:
         with self._lock:
             self._tpm_window.append((now, total))
             self._total_tokens_today += total
-            # Prune old entries
             cutoff = now - 60.0
             while self._tpm_window and self._tpm_window[0][0] < cutoff:
                 self._tpm_window.popleft()
 
-        # Wake any waiters (not strictly needed, but keeps status fresh)
+        # Wake any waiters
         with self._condition:
             self._condition.notify_all()
 
@@ -201,13 +176,11 @@ class RateLimiter:
             self._prune_rpm_window(now)
             self._rotate_day()
 
-            # TPM calculation
             cutoff = now - 60.0
             while self._tpm_window and self._tpm_window[0][0] < cutoff:
                 self._tpm_window.popleft()
             current_tpm = sum(t for _, t in self._tpm_window)
 
-            # Time until next RPM slot
             if len(self._rpm_window) >= self._rpm:
                 next_slot = max(0.0, self._rpm_window[0] + 60.0 - now)
             else:
@@ -222,9 +195,7 @@ class RateLimiter:
                 "tpm_limit": self._tpm,
                 "tokens_today": self._total_tokens_today,
                 "next_rpm_slot_seconds": round(next_slot, 1),
-                "rpd_resets_at": str(
-                    datetime.combine(date.today() + timedelta(days=1), dt_time.min)
-                ),
+                "rpd_resets_at": str(datetime.combine(date.today() + timedelta(days=1), dt_time.min)),
                 "total_requests": self._total_requests,
                 "total_blocks_rpm": self._total_blocks_rpm,
                 "total_blocks_rpd": self._total_blocks_rpd,
@@ -233,21 +204,14 @@ class RateLimiter:
     # ── Internal helpers ─────────────────────────────────────────────
 
     def _prune_rpm_window(self, now: float) -> None:
-        """Remove timestamps older than 60 seconds."""
         cutoff = now - 60.0
         while self._rpm_window and self._rpm_window[0] < cutoff:
             self._rpm_window.popleft()
 
     def _rotate_day(self) -> None:
-        """Reset RPD counter if the calendar day has changed."""
         today = date.today()
         if today != self._rpd_date:
-            logger.info(
-                "Day rolled over (%s → %s). Resetting RPD counter from %d.",
-                self._rpd_date,
-                today,
-                self._rpd_count,
-            )
+            logger.info("Day rolled over (%s → %s). Resetting RPD counter from %d.", self._rpd_date, today, self._rpd_count)
             self._rpd_date = today
             self._rpd_count = 0
             self._total_tokens_today = 0
@@ -255,13 +219,11 @@ class RateLimiter:
 
     @staticmethod
     def _seconds_until_midnight() -> float:
-        """Seconds from now until midnight local time."""
         now = datetime.now()
         midnight = datetime.combine(now.date() + timedelta(days=1), dt_time.min)
         return max(0.0, (midnight - now).total_seconds())
 
     def _load_rpd_state(self) -> None:
-        """Load persisted RPD state from disk."""
         if not self._rpd_state_path or not self._rpd_state_path.exists():
             return
         try:
@@ -277,28 +239,22 @@ class RateLimiter:
             logger.warning("Could not read RPD state file.", exc_info=True)
 
     def _save_rpd_state(self) -> None:
-        """Persist RPD state to disk."""
         if not self._rpd_state_path:
             return
         try:
             self._rpd_state_path.parent.mkdir(parents=True, exist_ok=True)
             payload = {"date": str(self._rpd_date), "count": self._rpd_count}
-            self._rpd_state_path.write_text(
-                json.dumps(payload), encoding="utf-8"
-            )
+            self._rpd_state_path.write_text(json.dumps(payload), encoding="utf-8")
         except Exception:
             logger.warning("Could not save RPD state.", exc_info=True)
 
     def _notify_status(self) -> None:
-        """Fire status-change callbacks (non-blocking)."""
         for cb in self._on_status_change:
             try:
                 cb(self.get_status())
             except Exception:
                 pass
 
-
-# ── Singleton ────────────────────────────────────────────────────────────
 
 _instance: RateLimiter | None = None
 _instance_lock = threading.Lock()

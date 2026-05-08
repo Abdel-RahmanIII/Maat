@@ -1,17 +1,19 @@
 """Experiment orchestrator — manages worker threads and experiment lifecycle.
 
-The :class:`Orchestrator` is the central brain of the runner.  It:
+The orchestrator is the runner's *control-plane brain*:
 
-1. Reads experiment YAML configs and runner config.
-2. Spawns worker threads via ``ThreadPoolExecutor``.
-3. Manages pause / resume / stop events.
-4. Tracks per-experiment, per-condition progress.
-5. Pushes real-time events to the WebSocket via callbacks.
+- Reads experiment YAML configs and runner config.
+- Spawns worker threads via `ThreadPoolExecutor`.
+- Manages pause / resume / stop events.
+- Tracks per-experiment, per-condition progress.
+- Pushes real-time events to the WebSocket via callbacks.
+
+It deliberately does *not* know anything about FastAPI/WebSockets directly.
+It only emits dictionaries to an `on_event` callback.
 """
 
 from __future__ import annotations
 
-import json
 import logging
 import threading
 import time
@@ -24,91 +26,19 @@ from src.config import ModelConfig
 from src.engine.config_loader import load_experiment_config
 from src.engine.game_manager import load_starting_positions
 from src.engine.puzzle_manager import load_puzzle_inputs
-from src.engine.result_store import load_checkpoint
-from src.runner.checkpoint import (
+from src.engine.result_store import load_completed_game_ids
+from src.runner.core.progress import ExperimentProgress
+from src.runner.limiting.rate_limiter import get_rate_limiter
+from src.runner.paths import experiment_config_path, project_root
+from src.runner.persistence.checkpoint import (
     list_incomplete_games,
-    load_run_progress,
     save_run_progress,
 )
-from src.runner.rate_limiter import get_rate_limiter
-from src.runner.worker import run_game_worker, run_puzzle_worker
+from src.runner.workers.games import run_game_worker
+from src.runner.workers.puzzles import run_puzzle_worker
 from src.state import InputMode
 
 logger = logging.getLogger(__name__)
-
-# Project root for resolving paths
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-
-
-# ── Progress tracking data structures ────────────────────────────────────
-
-
-class ConditionProgress:
-    """Thread-safe per-condition progress tracker."""
-
-    def __init__(self, condition: str, total: int) -> None:
-        self.condition = condition
-        self.total = total
-        self._lock = threading.Lock()
-        self.completed = 0
-        self.failed = 0
-        self.in_progress = 0
-        self.valid_count = 0
-
-    def record_complete(self, is_valid: bool = True) -> None:
-        with self._lock:
-            self.completed += 1
-            self.in_progress = max(0, self.in_progress - 1)
-            if is_valid:
-                self.valid_count += 1
-
-    def record_start(self) -> None:
-        with self._lock:
-            self.in_progress += 1
-
-    def record_failure(self) -> None:
-        with self._lock:
-            self.failed += 1
-            self.in_progress = max(0, self.in_progress - 1)
-
-    def to_dict(self) -> dict[str, Any]:
-        with self._lock:
-            return {
-                "condition": self.condition,
-                "total": self.total,
-                "completed": self.completed,
-                "failed": self.failed,
-                "in_progress": self.in_progress,
-                "valid_count": self.valid_count,
-            }
-
-
-class ExperimentProgress:
-    """Thread-safe per-experiment progress tracker."""
-
-    def __init__(self, experiment: int, conditions: list[str], output_dir: Path | None = None) -> None:
-        self.experiment = experiment
-        self.conditions_progress: dict[str, ConditionProgress] = {}
-        self._conditions = conditions
-        self.status = "pending"
-        self.started_at: str | None = None
-        self.output_dir: Path | None = output_dir
-
-    def init_condition(self, condition: str, total: int) -> None:
-        self.conditions_progress[condition] = ConditionProgress(condition, total)
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "experiment": self.experiment,
-            "status": self.status,
-            "started_at": self.started_at,
-            "conditions": {
-                c: cp.to_dict() for c, cp in self.conditions_progress.items()
-            },
-        }
-
-
-# ── Orchestrator ─────────────────────────────────────────────────────────
 
 
 class Orchestrator:
@@ -123,14 +53,13 @@ class Orchestrator:
         self._max_concurrent = max_concurrent_per_condition
         self._on_event = on_event
 
-        # Lifecycle events
+        # Lifecycle events shared across all workers
         self._pause_event = threading.Event()
         self._pause_event.set()  # Initially NOT paused
         self._stop_event = threading.Event()
 
         # State
-        self._status = "idle"  # idle | running | paused | stopping | stopped
-        self._executor: ThreadPoolExecutor | None = None
+        self._status = "idle"  # idle | running | paused | stopping | stopped | completed
         self._futures: list[Future] = []
         self._experiments: dict[int, ExperimentProgress] = {}
         self._run_thread: threading.Thread | None = None
@@ -158,13 +87,12 @@ class Orchestrator:
         Parameters
         ----------
         experiments:
-            List of ``{"id": 1, "conditions": ["A", "B", ...]}``.
+            List of `{"id": 1, "conditions": ["A", "B", ...]}`.
         parallel_experiments:
-            If ``True``, run all experiments concurrently.
-            If ``False``, run them sequentially.
+            If True, run all experiments concurrently.
+            If False, run them sequentially.
         generation_strategy:
-            One of ``generator_only``, ``planner_actor``,
-            ``threat_analyst``.  Overrides the YAML config.
+            Overrides the YAML config (`generator_only`, `planner_actor`, `threat_analyst`).
         """
 
         if self._status == "running":
@@ -180,7 +108,7 @@ class Orchestrator:
 
         self._emit({"type": "run_started", "experiments": experiments})
 
-        # Run in a background thread so the API endpoint returns immediately
+        # Run in a background thread so API can return immediately
         self._run_thread = threading.Thread(
             target=self._run_experiments,
             args=(experiments, parallel_experiments),
@@ -190,6 +118,7 @@ class Orchestrator:
 
     def pause(self) -> None:
         """Pause all workers."""
+
         if self._status != "running":
             return
         self._status = "paused"
@@ -199,6 +128,7 @@ class Orchestrator:
 
     def resume(self) -> None:
         """Resume paused workers."""
+
         if self._status != "paused":
             return
         self._status = "running"
@@ -207,11 +137,12 @@ class Orchestrator:
 
     def stop(self) -> None:
         """Graceful stop — workers finish current unit and exit."""
+
         if self._status not in ("running", "paused"):
             return
         self._status = "stopping"
         self._stop_event.set()
-        self._pause_event.set()  # Unblock any paused workers
+        self._pause_event.set()  # Unblock paused workers
         self._save_all_progress()
         self._emit({"type": "run_stopping"})
 
@@ -227,10 +158,7 @@ class Orchestrator:
             "status": self._status,
             "started_at": self._started_at,
             "rate_limits": rate_limiter.get_status(),
-            "experiments": {
-                exp_id: ep.to_dict()
-                for exp_id, ep in self._experiments.items()
-            },
+            "experiments": {exp_id: ep.to_dict() for exp_id, ep in self._experiments.items()},
             "active_workers": active,
             "recent_errors": self._recent_errors[-20:],
             "api_log": self._get_recent_api_log(50),
@@ -238,16 +166,12 @@ class Orchestrator:
 
     # ── Internal run logic ───────────────────────────────────────────
 
-    def _run_experiments(
-        self,
-        exp_configs: list[dict[str, Any]],
-        parallel: bool,
-    ) -> None:
+    def _run_experiments(self, exp_configs: list[dict[str, Any]], parallel: bool) -> None:
         """Main orchestration loop (runs in background thread)."""
 
         try:
             if parallel:
-                threads = []
+                threads: list[threading.Thread] = []
                 for exp_cfg in exp_configs:
                     t = threading.Thread(
                         target=self._run_single_experiment,
@@ -267,10 +191,7 @@ class Orchestrator:
         except Exception:
             logger.exception("Orchestrator error")
         finally:
-            if not self._stop_event.is_set():
-                self._status = "completed"
-            else:
-                self._status = "stopped"
+            self._status = "completed" if not self._stop_event.is_set() else "stopped"
             self._save_all_progress()
             self._emit({"type": "run_finished", "status": self._status})
 
@@ -280,24 +201,22 @@ class Orchestrator:
         exp_id = exp_cfg["id"]
         conditions = [c.upper() for c in exp_cfg["conditions"]]
 
-        # Load experiment YAML config
-        yaml_path = _PROJECT_ROOT / "configs" / f"experiment_{exp_id}.yaml"
+        yaml_path = experiment_config_path(exp_id)
         if not yaml_path.exists():
             logger.error("Config not found: %s", yaml_path)
             return
 
         config = load_experiment_config(yaml_path)
-        output_dir = config["output_dir"]
+        output_dir: Path = config["output_dir"]
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        model_config = config["model_config"]
-        # Use the UI-selected generation strategy, falling back to YAML config
+        model_config: ModelConfig = config["model_config"]
+
         gen_strategy = getattr(self, "_generation_strategy", None) or config["generation_strategy"]
         max_api_retries = config["max_api_retries"]
         backoff_base = config["backoff_base"]
         backoff_max = config["backoff_max"]
 
-        # Build experiment progress tracker
         exp_progress = ExperimentProgress(exp_id, conditions, output_dir=output_dir)
         exp_progress.status = "running"
         exp_progress.started_at = datetime.now().isoformat()
@@ -330,11 +249,9 @@ class Orchestrator:
             )
 
         exp_progress.status = "stopped" if self._stop_event.is_set() else "completed"
-        self._emit({
-            "type": "experiment_finished",
-            "experiment": exp_id,
-            "status": exp_progress.status,
-        })
+        self._emit({"type": "experiment_finished", "experiment": exp_id, "status": exp_progress.status})
+
+    # ── Puzzle experiment (Exp 1) ───────────────────────────────────
 
     def _run_puzzle_experiment(
         self,
@@ -349,12 +266,8 @@ class Orchestrator:
         backoff_max: float,
         exp_progress: ExperimentProgress,
     ) -> None:
-        """Run Experiment 1 (puzzles) across conditions."""
-
         puzzles = load_puzzle_inputs(config["puzzle_data"])
-        completed_ids = load_checkpoint(output_dir / ".checkpoint")
 
-        # Total workers = conditions × puzzles
         max_workers = self._max_concurrent * len(conditions)
         executor = ThreadPoolExecutor(max_workers=max_workers)
         futures: list[tuple[Future, str, str]] = []
@@ -364,19 +277,18 @@ class Orchestrator:
                 if self._stop_event.is_set():
                     break
 
-                # Count remaining puzzles
-                remaining = []
+                results_path = output_dir / f"exp1_{condition}_results.jsonl"
+                completed_ids = load_completed_game_ids(results_path, output_dir / ".checkpoint")
+
+                remaining: list[tuple[dict[str, Any], int, str]] = []
                 for idx, puzzle in enumerate(puzzles):
                     pid = puzzle.get("puzzle_id", f"pos_{idx}")
                     gid = f"exp1_{pid}_{condition}"
                     if gid not in completed_ids:
                         remaining.append((puzzle, idx, gid))
 
-                exp_progress.init_condition(
-                    condition,
-                    total=len(puzzles),
-                )
-                # Mark already-completed count
+                exp_progress.init_condition(condition, total=len(puzzles))
+
                 cp = exp_progress.conditions_progress[condition]
                 cp.completed = len(puzzles) - len(remaining)
 
@@ -388,7 +300,7 @@ class Orchestrator:
                     "remaining": len(remaining),
                 })
 
-                for puzzle, idx, gid in remaining:
+                for puzzle, _idx, gid in remaining:
                     if self._stop_event.is_set():
                         break
 
@@ -408,8 +320,7 @@ class Orchestrator:
                     )
                     futures.append((f, condition, gid))
 
-            # Wait for all futures
-            for f, cond, gid in futures:
+            for f, _cond, gid in futures:
                 try:
                     f.result()
                 except Exception:
@@ -471,6 +382,8 @@ class Orchestrator:
             with self._active_lock:
                 self._active_workers.pop(game_id, None)
 
+    # ── Game experiments (Exp 2/3) ───────────────────────────────────
+
     def _run_game_experiment(
         self,
         *,
@@ -485,11 +398,8 @@ class Orchestrator:
         backoff_max: float,
         exp_progress: ExperimentProgress,
     ) -> None:
-        """Run Experiment 2 or 3 (full games) across conditions."""
-
         positions = load_starting_positions(config["starting_positions"])
-        completed_ids = load_checkpoint(output_dir / ".checkpoint")
-        incomplete_ids = set(list_incomplete_games(output_dir))
+        _incomplete_ids = set(list_incomplete_games(output_dir))
 
         input_mode: InputMode = config.get("input_mode", "fen" if experiment == 2 else "history")
         max_half_moves = config.get("max_half_moves", 150)
@@ -505,16 +415,16 @@ class Orchestrator:
                 if self._stop_event.is_set():
                     break
 
-                remaining = []
+                results_path = output_dir / f"exp{experiment}_{condition}_results.jsonl"
+                completed_ids = load_completed_game_ids(results_path, output_dir / ".checkpoint")
+
+                remaining: list[tuple[str, int, str]] = []
                 for idx, fen in enumerate(positions):
                     gid = f"exp{experiment}_{condition}_game{idx:03d}"
                     if gid not in completed_ids:
                         remaining.append((fen, idx, gid))
 
-                exp_progress.init_condition(
-                    condition,
-                    total=len(positions),
-                )
+                exp_progress.init_condition(condition, total=len(positions))
                 cp = exp_progress.conditions_progress[condition]
                 cp.completed = len(positions) - len(remaining)
 
@@ -526,7 +436,7 @@ class Orchestrator:
                     "remaining": len(remaining),
                 })
 
-                for fen, idx, gid in remaining:
+                for fen, _idx, gid in remaining:
                     if self._stop_event.is_set():
                         break
 
@@ -551,7 +461,7 @@ class Orchestrator:
                     )
                     futures.append((f, condition, gid))
 
-            for f, cond, gid in futures:
+            for f, _cond, gid in futures:
                 try:
                     f.result()
                 except Exception:
@@ -627,40 +537,32 @@ class Orchestrator:
     def _handle_worker_event(self, event: dict[str, Any]) -> None:
         """Process events from workers."""
 
-        event_type = event.get("type", "")
-
-        if event_type == "worker_error":
-            self._recent_errors.append({
-                **event,
-                "timestamp": datetime.now().isoformat(),
-            })
-            # Keep only last 100 errors
+        if event.get("type") == "worker_error":
+            self._recent_errors.append({**event, "timestamp": datetime.now().isoformat()})
             if len(self._recent_errors) > 100:
                 self._recent_errors = self._recent_errors[-100:]
 
         self._emit(event)
 
     def _emit(self, event: dict[str, Any]) -> None:
-        """Push event to WebSocket via callback."""
+        """Push event to the API layer via callback."""
+
         if self._on_event:
             try:
                 self._on_event(event)
             except Exception:
                 pass
 
-    def _save_all_progress(self) -> None:
-        """Persist progress for all experiments."""
+    # ── Persistence for dashboard resume ─────────────────────────────
 
+    def _save_all_progress(self) -> None:
         for exp_id, ep in self._experiments.items():
-            output_dir = ep.output_dir or (_PROJECT_ROOT / "results" / f"exp{exp_id}")
+            output_dir = ep.output_dir or (project_root() / "results" / f"exp{exp_id}")
             save_run_progress(
                 output_dir,
                 experiment=exp_id,
                 conditions=list(ep.conditions_progress.keys()),
-                condition_progress={
-                    c: cp.to_dict()
-                    for c, cp in ep.conditions_progress.items()
-                },
+                condition_progress={c: cp.to_dict() for c, cp in ep.conditions_progress.items()},
                 status=self._status,
                 started_at=self._started_at,
                 paused_at=datetime.now().isoformat() if self._status == "paused" else None,
@@ -671,7 +573,8 @@ class Orchestrator:
             return self._api_log[-n:]
 
     def add_api_log_entry(self, entry: dict[str, Any]) -> None:
-        """Add an API call log entry (called from llm_client hook)."""
+        """Add an API call log entry (reserved for future hooks)."""
+
         with self._api_log_lock:
             self._api_log.append(entry)
             if len(self._api_log) > 500:

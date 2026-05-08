@@ -1,18 +1,24 @@
 """Turn-level checkpoint persistence for resumable experiments.
 
-Extends the existing game-level checkpoint (``output_dir/.checkpoint``)
-with per-game state files that capture mid-game progress:
+Extends the existing game-level checkpoint (`output_dir/.checkpoint`) with
+per-game state files that capture mid-game progress:
 
     output_dir/.game_state/{game_id}.json
 
-On resume, incomplete games are detected and continued from the last
-completed turn.
+Additionally stores a dashboard-friendly snapshot of overall run progress:
+
+    output_dir/.run_progress.json
+
+These files allow the runner to resume in-progress games and display progress
+if the server restarts.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import time
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -23,7 +29,8 @@ logger = logging.getLogger(__name__)
 
 
 def _state_dir(output_dir: Path) -> Path:
-    """Return the ``.game_state`` directory under *output_dir*."""
+    """Return the `.game_state` directory under `output_dir`."""
+
     return output_dir / ".game_state"
 
 
@@ -65,7 +72,6 @@ def save_game_state(
         "generation_strategy": generation_strategy,
     }
 
-    # Atomic write: write to tmp then rename
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     tmp.replace(path)
@@ -74,7 +80,7 @@ def save_game_state(
 
 
 def load_game_state(output_dir: Path, game_id: str) -> dict[str, Any] | None:
-    """Load a saved game state, or return ``None`` if not found."""
+    """Load a saved game state, or return None if not found."""
 
     path = _state_dir(output_dir) / f"{game_id}.json"
     if not path.exists():
@@ -118,7 +124,7 @@ def save_run_progress(
 ) -> Path:
     """Save overall experiment-run progress for dashboard display on resume.
 
-    Written to ``output_dir/.run_progress.json``.
+    Written to `output_dir/.run_progress.json`.
     """
 
     path = output_dir / ".run_progress.json"
@@ -133,15 +139,25 @@ def save_run_progress(
         "paused_at": paused_at,
     }
 
-    tmp = path.with_suffix(".tmp")
+    # Use a unique temp file name to avoid collisions under concurrent writes.
+    tmp = output_dir / f".run_progress.{uuid.uuid4().hex}.tmp"
     tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    tmp.replace(path)
+
+    # On Windows, antivirus/indexers or concurrent writers can transiently lock files.
+    for attempt in range(3):
+        try:
+            tmp.replace(path)
+            break
+        except PermissionError:
+            if attempt == 2:
+                raise
+            time.sleep(0.01)
 
     return path
 
 
 def load_run_progress(output_dir: Path) -> dict[str, Any] | None:
-    """Load experiment-run progress, or ``None`` if not found."""
+    """Load experiment-run progress, or return None if not found."""
 
     path = output_dir / ".run_progress.json"
     if not path.exists():
