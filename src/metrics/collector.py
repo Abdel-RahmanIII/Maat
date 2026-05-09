@@ -270,3 +270,29 @@ class MetricsCollector:
     def current_turn_count(self) -> int:
         """Number of turns recorded so far."""
         return len(self._turn_records)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize the metrics collector state to a dictionary."""
+        return {
+            "game_id": self.game_id,
+            "condition": self.condition,
+            "experiment": self.experiment,
+            "input_mode": self.input_mode,
+            "starting_fen": self.starting_fen,
+            "turn_records": [t.model_dump() for t in self._turn_records],
+            "turn_start_ns": self._turn_start_ns,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> MetricsCollector:
+        """Deserialize from a dictionary."""
+        instance = cls(
+            game_id=data["game_id"],
+            condition=data["condition"],
+            experiment=data["experiment"],
+            input_mode=data.get("input_mode", "fen"),
+            starting_fen=data.get("starting_fen", ""),
+        )
+        instance._turn_records = [TurnRecord.model_validate(t) for t in data.get("turn_records", [])]
+        instance._turn_start_ns = data.get("turn_start_ns")
+        return instance

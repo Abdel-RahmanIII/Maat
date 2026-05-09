@@ -11,16 +11,18 @@ collecting per-turn metrics and producing :class:`GameRecord` objects.
 
 from __future__ import annotations
 
+import json
 import logging
+import threading
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import chess
 
 from src.config import ModelConfig, config_for_condition
 from src.context import ConversationContext
-from src.engine.condition_dispatch import dispatch_turn_with_backoff
+from src.engine.condition_dispatch import dispatch_turn
 from src.engine.result_store import (
     append_checkpoint,
     append_game_record,
@@ -88,9 +90,6 @@ class GameManager:
         model_config: ModelConfig | None = None,
         generation_strategy: str = "generator_only",
         delay_seconds: float = 0.0,
-        max_api_retries: int = 5,
-        backoff_base: float = 2.0,
-        backoff_max: float = 60.0,
     ) -> None:
         if experiment not in (2, 3):
             raise ValueError(f"experiment must be 2 or 3, got {experiment}")
@@ -105,9 +104,6 @@ class GameManager:
         self.model_config = model_config
         self.generation_strategy = generation_strategy
         self.delay_seconds = delay_seconds
-        self.max_api_retries = max_api_retries
-        self.backoff_base = backoff_base
-        self.backoff_max = backoff_max
 
         self.input_mode: InputMode = "fen" if experiment == 2 else "history"
 
@@ -160,7 +156,12 @@ class GameManager:
         condition: str,
         game_index: int = 0,
         stockfish: StockfishWrapper | None = None,
-    ) -> GameRecord:
+        game_id: str | None = None,
+        resume_state: dict[str, Any] | None = None,
+        pause_event: threading.Event | None = None,
+        stop_event: threading.Event | None = None,
+        on_progress: Callable[[dict[str, Any]], None] | None = None,
+    ) -> GameRecord | None:
         """Play one game.  Optionally accepts a pre-started Stockfish."""
 
         owns_sf = stockfish is None
@@ -177,6 +178,11 @@ class GameManager:
                 condition=condition.upper(),
                 game_index=game_index,
                 stockfish=sf,
+                game_id=game_id,
+                resume_state=resume_state,
+                pause_event=pause_event,
+                stop_event=stop_event,
+                on_progress=on_progress,
             )
         finally:
             if owns_sf:
@@ -252,7 +258,11 @@ class GameManager:
         game_index: int,
         stockfish: StockfishWrapper,
         game_id: str | None = None,
-    ) -> GameRecord:
+        resume_state: dict[str, Any] | None = None,
+        pause_event: threading.Event | None = None,
+        stop_event: threading.Event | None = None,
+        on_progress: Callable[[dict[str, Any]], None] | None = None,
+    ) -> GameRecord | None:
         """Play one full game: LLM (White) vs Stockfish (Black)."""
 
         gid = game_id or f"exp{self.experiment}_{condition}_game{game_index:03d}"
@@ -260,20 +270,64 @@ class GameManager:
 
         board = chess.Board(starting_fen)
 
-        collector = MetricsCollector(
-            game_id=gid,
-            condition=condition,
-            experiment=self.experiment,
-            input_mode=self.input_mode,
-            starting_fen=starting_fen,
-        )
-
-        context = ConversationContext()  # One per game
+        if resume_state:
+            for move_uci in resume_state.get("move_history", []):
+                board.push(chess.Move.from_uci(move_uci))
+            collector = MetricsCollector.from_dict(resume_state["collector"])
+            context = ConversationContext.from_dict(resume_state["context"])
+            half_moves_played = len(resume_state.get("move_history", []))
+            logger.info("[Exp%d] Resuming %s from half-move %d", self.experiment, gid, half_moves_played)
+        else:
+            collector = MetricsCollector(
+                game_id=gid,
+                condition=condition,
+                experiment=self.experiment,
+                input_mode=self.input_mode,
+                starting_fen=starting_fen,
+            )
+            context = ConversationContext()  # One per game
+            half_moves_played = 0
 
         game_status = "ongoing"
-        half_moves_played = 0
+
+        if on_progress:
+            on_progress({
+                "type": "worker_status",
+                "game_id": gid,
+                "condition": condition,
+                "experiment": self.experiment,
+                "status": "running",
+                "detail": f"Turn {half_moves_played}",
+            })
 
         while game_status == "ongoing":
+            # ── Check stop/pause ──
+            if stop_event and stop_event.is_set():
+                self._save_checkpoint_to_disk(condition, gid, starting_fen, board, collector, context)
+                if on_progress:
+                    on_progress({
+                        "type": "worker_status",
+                        "game_id": gid,
+                        "condition": condition,
+                        "experiment": self.experiment,
+                        "status": "stopped",
+                        "detail": f"Saved at half-move {half_moves_played}",
+                    })
+                return None
+
+            if pause_event and not pause_event.is_set():
+                self._save_checkpoint_to_disk(condition, gid, starting_fen, board, collector, context)
+                if on_progress:
+                    on_progress({
+                        "type": "worker_status",
+                        "game_id": gid,
+                        "condition": condition,
+                        "experiment": self.experiment,
+                        "status": "paused",
+                        "detail": f"Paused at half-move {half_moves_played}",
+                    })
+                pause_event.wait()
+
             # ── Check half-move cap ──
             if half_moves_played >= self.max_half_moves:
                 game_status = "max_moves"
@@ -283,14 +337,27 @@ class GameManager:
 
             if side_to_move == chess.WHITE:
                 # ── LLM's turn ──
-                game_status = self._llm_turn(
-                    board=board,
-                    condition=condition,
-                    cond_cfg=cond_cfg,
-                    collector=collector,
-                    game_id=gid,
-                    context=context,
-                )
+                try:
+                    game_status = self._llm_turn(
+                        board=board,
+                        condition=condition,
+                        cond_cfg=cond_cfg,
+                        collector=collector,
+                        game_id=gid,
+                        context=context,
+                    )
+                except Exception as exc:
+                    logger.exception("[Exp%d] Unrecoverable error in %s. Saving checkpoint and aborting.", self.experiment, gid)
+                    self._save_checkpoint_to_disk(condition, gid, starting_fen, board, collector, context)
+                    if on_progress:
+                        on_progress({
+                            "type": "worker_error",
+                            "game_id": gid,
+                            "condition": condition,
+                            "experiment": self.experiment,
+                            "error": str(exc),
+                        })
+                    raise
             else:
                 # ── Stockfish's turn ──
                 self._stockfish_turn(board, stockfish)
@@ -301,10 +368,76 @@ class GameManager:
             if game_status == "ongoing":
                 game_status = self._check_termination(board)
 
-        return collector.finalize_game(
+            # ── Save mid-game checkpoint ──
+            if game_status == "ongoing":
+                self._save_checkpoint_to_disk(condition, gid, starting_fen, board, collector, context)
+
+            # Capture last turn info for the event
+            last_move = ""
+            last_valid = False
+            last_response = ""
+            if side_to_move == chess.WHITE and collector.turn_records:
+                last_tr = collector.turn_records[-1]
+                last_move = last_tr.proposed_move
+                last_valid = last_tr.is_valid
+                last_response = last_tr.raw_llm_response
+
+            if on_progress:
+                on_progress({
+                    "type": "game_turn",
+                    "game_id": gid,
+                    "condition": condition,
+                    "experiment": self.experiment,
+                    "half_moves": half_moves_played,
+                    "game_status": game_status,
+                    "proposed_move": last_move,
+                    "is_valid": last_valid,
+                    "raw_llm_response": last_response,
+                })
+
+        # ── Delete mid-game checkpoint on completion ──
+        final_checkpoint_dir = self.output_dir / ".midgame_checkpoints" / f"{condition}_{self.generation_strategy}"
+        final_checkpoint_path = final_checkpoint_dir / f"{gid}.json"
+        if final_checkpoint_path.exists():
+            try:
+                final_checkpoint_path.unlink()
+            except OSError as e:
+                logger.warning("Failed to delete checkpoint %s: %s", final_checkpoint_path, e)
+
+        record = collector.finalize_game(
             final_status=game_status,
             starting_fen=starting_fen,
         )
+
+        if on_progress:
+            on_progress({
+                "type": "game_complete",
+                "game_id": gid,
+                "condition": condition,
+                "experiment": self.experiment,
+                "status": game_status,
+                "total_turns": record.total_turns,
+            })
+
+        return record
+
+    def _save_checkpoint_to_disk(self, condition: str, gid: str, starting_fen: str, board: chess.Board, collector: MetricsCollector, context: ConversationContext) -> None:
+        """Helper to save the current board and memory to a mid-game checkpoint file."""
+        checkpoint_dir = self.output_dir / ".midgame_checkpoints" / f"{condition}_{self.generation_strategy}"
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        checkpoint_path = checkpoint_dir / f"{gid}.json"
+        
+        midgame_data = {
+            "starting_fen": starting_fen,
+            "condition": condition,
+            "game_id": gid,
+            "move_history": [m.uci() for m in board.move_stack],
+            "collector": collector.to_dict(),
+            "context": context.to_dict(),
+        }
+        
+        with open(checkpoint_path, "w", encoding="utf-8") as fh:
+            json.dump(midgame_data, fh, indent=2)
 
     def _llm_turn(
         self,
@@ -324,7 +457,7 @@ class GameManager:
 
         collector.start_turn()
 
-        state = dispatch_turn_with_backoff(
+        state = dispatch_turn(
             condition,
             fen=fen,
             move_history=move_history,
@@ -334,9 +467,6 @@ class GameManager:
             generation_strategy=self.generation_strategy,
             model_config=self.model_config,
             max_react_steps=cond_cfg.max_react_steps,
-            max_api_retries=self.max_api_retries,
-            base_delay=self.backoff_base,
-            max_delay=self.backoff_max,
             context=context,
         )
 

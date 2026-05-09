@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from scripts.puzzle_sampler import (
+from src.data.puzzle_sampler import (
     PuzzleRecord,
     apply_quality_filters,
     assign_difficulty,

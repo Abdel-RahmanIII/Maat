@@ -10,7 +10,7 @@ This package provides:
 - Result persistence utilities in :mod:`result_store`.
 """
 
-from src.engine.condition_dispatch import dispatch_turn, dispatch_turn_with_backoff
+from src.engine.condition_dispatch import dispatch_turn
 from src.engine.game_manager import GameManager, load_starting_positions
 from src.engine.puzzle_manager import PuzzleManager, load_puzzle_inputs
 from src.engine.result_store import (
@@ -27,7 +27,6 @@ __all__ = [
     "StockfishWrapper",
     # Dispatch
     "dispatch_turn",
-    "dispatch_turn_with_backoff",
     # Orchestrators
     "PuzzleManager",
     "GameManager",

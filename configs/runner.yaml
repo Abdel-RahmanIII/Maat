@@ -9,7 +9,7 @@ rate_limits:
 
 # Concurrency
 concurrency:
-  max_concurrent_per_condition: 15   # Parallel puzzles/games per condition
+  max_concurrent_per_condition: 5   # Parallel puzzles/games per condition
 
 # Server
 server:

@@ -10,13 +10,14 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from src.config import ModelConfig, config_for_condition
 from src.context import ConversationContext
-from src.engine.condition_dispatch import dispatch_turn_with_backoff
+from src.engine.condition_dispatch import dispatch_turn
 from src.engine.result_store import (
     append_checkpoint,
     append_game_record,
@@ -83,9 +84,6 @@ class PuzzleManager:
         model_config: ModelConfig | None = None,
         generation_strategy: str = "generator_only",
         delay_seconds: float = 0.0,
-        max_api_retries: int = 5,
-        backoff_base: float = 2.0,
-        backoff_max: float = 60.0,
     ) -> None:
         self.puzzles = puzzles
         self.conditions = [c.upper() for c in conditions]
@@ -93,9 +91,6 @@ class PuzzleManager:
         self.model_config = model_config
         self.generation_strategy = generation_strategy
         self.delay_seconds = delay_seconds
-        self.max_api_retries = max_api_retries
-        self.backoff_base = backoff_base
-        self.backoff_max = backoff_max
 
         # Derived paths
         self._checkpoint_path = self.output_dir / ".checkpoint"
@@ -147,10 +142,19 @@ class PuzzleManager:
         self,
         puzzle: dict[str, Any],
         condition: str,
-    ) -> GameRecord:
+        pause_event: threading.Event | None = None,
+        stop_event: threading.Event | None = None,
+        on_progress: Callable[[dict[str, Any]], None] | None = None,
+    ) -> GameRecord | None:
         """Evaluate a single puzzle under a single condition."""
 
-        return self._evaluate_puzzle(puzzle, condition.upper())
+        return self._evaluate_puzzle(
+            puzzle, 
+            condition.upper(),
+            pause_event=pause_event,
+            stop_event=stop_event,
+            on_progress=on_progress,
+        )
 
     # ── Internal helpers ─────────────────────────────────────────────
 
@@ -163,6 +167,7 @@ class PuzzleManager:
 
         results_path = self.output_dir / f"exp1_{condition}_results.jsonl"
         records: list[GameRecord] = []
+        skipped = self._get_skipped()
 
         for idx, puzzle in enumerate(self.puzzles):
             puzzle_id = puzzle.get("puzzle_id", f"pos_{idx}")
@@ -171,13 +176,15 @@ class PuzzleManager:
             if game_id in completed:
                 logger.debug("[Exp1] Skipping %s (checkpointed)", game_id)
                 continue
+            if game_id in skipped:
+                logger.debug("[Exp1] Skipping %s (marked as skipped)", game_id)
+                continue
 
             try:
                 record = self._evaluate_puzzle(puzzle, condition, game_id=game_id)
             except Exception:
-                logger.exception(
-                    "[Exp1] Fatal error on %s — skipping", game_id,
-                )
+                logger.exception("[Exp1] Fatal error on %s — skipping and marking as skipped", game_id)
+                self._mark_skipped(puzzle_id, condition)
                 continue
 
             # Persist
@@ -209,7 +216,10 @@ class PuzzleManager:
         puzzle: dict[str, Any],
         condition: str,
         game_id: str | None = None,
-    ) -> GameRecord:
+        pause_event: threading.Event | None = None,
+        stop_event: threading.Event | None = None,
+        on_progress: Callable[[dict[str, Any]], None] | None = None,
+    ) -> GameRecord | None:
         """Run one turn for a puzzle-condition pair."""
 
         puzzle_id = puzzle.get("puzzle_id", "unknown")
@@ -226,26 +236,69 @@ class PuzzleManager:
             starting_fen=fen,
         )
 
+        if on_progress:
+            on_progress({
+                "type": "worker_status",
+                "game_id": gid,
+                "condition": condition,
+                "experiment": 1,
+                "status": "running",
+                "detail": "Evaluating",
+            })
+
+        if stop_event and stop_event.is_set():
+            if on_progress:
+                on_progress({
+                    "type": "worker_status",
+                    "game_id": gid,
+                    "condition": condition,
+                    "experiment": 1,
+                    "status": "stopped",
+                    "detail": "Stopped before evaluation",
+                })
+            return None
+
+        if pause_event and not pause_event.is_set():
+            if on_progress:
+                on_progress({
+                    "type": "worker_status",
+                    "game_id": gid,
+                    "condition": condition,
+                    "experiment": 1,
+                    "status": "paused",
+                    "detail": "Paused before evaluation",
+                })
+            pause_event.wait()
+
         # ── Execute the turn ──
         collector.start_turn()
 
         context = ConversationContext()  # One per puzzle (single turn, uniform API)
 
-        state = dispatch_turn_with_backoff(
-            condition,
-            fen=fen,
-            move_history=[],
-            move_number=1,
-            game_id=gid,
-            input_mode="fen",
-            generation_strategy=self.generation_strategy,
-            model_config=self.model_config,
-            max_react_steps=cond_cfg.max_react_steps,
-            max_api_retries=self.max_api_retries,
-            base_delay=self.backoff_base,
-            max_delay=self.backoff_max,
-            context=context,
-        )
+        try:
+            state = dispatch_turn(
+                condition,
+                fen=fen,
+                move_history=[],
+                move_number=1,
+                game_id=gid,
+                input_mode="fen",
+                generation_strategy=self.generation_strategy,
+                model_config=self.model_config,
+                max_react_steps=cond_cfg.max_react_steps,
+                context=context,
+            )
+        except Exception as exc:
+            logger.exception("[Exp1] Fatal error on %s", gid)
+            if on_progress:
+                on_progress({
+                    "type": "worker_error",
+                    "game_id": gid,
+                    "condition": condition,
+                    "experiment": 1,
+                    "error": str(exc),
+                })
+            raise
 
         collector.end_turn(state)
 
@@ -254,7 +307,34 @@ class PuzzleManager:
         if final_status == "ongoing":
             final_status = "completed"
 
-        return collector.finalize_game(
+        record = collector.finalize_game(
             final_status=final_status,
             starting_fen=fen,
         )
+
+        if on_progress:
+            on_progress({
+                "type": "game_complete",
+                "game_id": gid,
+                "condition": condition,
+                "experiment": 1,
+                "status": final_status,
+                "total_turns": record.total_turns,
+            })
+
+        return record
+
+    def _get_skipped(self) -> set[str]:
+        """Load the set of skipped puzzle game_ids."""
+        skipped_file = self.output_dir / ".skipped_puzzles.txt"
+        if not skipped_file.exists():
+            return set()
+        with open(skipped_file, "r", encoding="utf-8") as fh:
+            return set(line.strip() for line in fh if line.strip())
+
+    def _mark_skipped(self, puzzle_id: str, condition: str) -> None:
+        """Mark a puzzle-condition pair as permanently skipped due to errors."""
+        skipped_file = self.output_dir / ".skipped_puzzles.txt"
+        game_id = f"exp1_{puzzle_id}_{condition}"
+        with open(skipped_file, "a", encoding="utf-8") as fh:
+            fh.write(f"{game_id}\n")

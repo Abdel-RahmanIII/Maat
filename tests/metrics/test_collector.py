@@ -235,3 +235,30 @@ class TestMetricsCollector:
 
         assert "INVALID_PIECE" in record.error_types
         assert "ILLEGAL_DESTINATION" in record.error_types
+
+    def test_serialization(self):
+        collector = MetricsCollector(
+            game_id="test_serialize",
+            condition="D",
+            experiment=1,
+            input_mode="fen",
+            starting_fen=STARTING_FEN,
+        )
+        state = _make_state()
+        collector.start_turn()
+        collector.end_turn(state)
+        
+        data = collector.to_dict()
+        assert data["game_id"] == "test_serialize"
+        assert data["condition"] == "D"
+        assert len(data["turn_records"]) == 1
+        
+        new_collector = MetricsCollector.from_dict(data)
+        assert new_collector.game_id == "test_serialize"
+        assert new_collector.condition == "D"
+        assert new_collector.experiment == 1
+        assert new_collector.input_mode == "fen"
+        assert new_collector.starting_fen == STARTING_FEN
+        assert len(new_collector.turn_records) == 1
+        assert new_collector.turn_records[0].move_number == 1
+        assert new_collector.turn_records[0].is_valid is True

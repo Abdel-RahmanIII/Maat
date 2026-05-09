@@ -1,6 +1,6 @@
 """Dataset and sampling utilities for experiments."""
 
-from scripts.puzzle_sampler import (
+from src.data.puzzle_sampler import (
 	DIFFICULTIES,
 	ENDGAME_THEME_HINTS,
 	LICHESS_PUZZLE_CSV_URL,

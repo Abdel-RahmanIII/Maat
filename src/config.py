@@ -39,9 +39,14 @@ class ModelConfig:
     """LLM model configuration."""
 
     model_name: str = "gemma-4-31b-it"
-    temperature: float = 0.0001
+    temperature: float = 0.0
     max_output_tokens: int = 1024
     api_key: str = field(default_factory=lambda: os.environ.get("GOOGLE_API_KEY", ""))
+    api_keys: list[str] = field(
+        default_factory=lambda: [
+            k.strip() for k in os.environ.get("GOOGLE_API_KEYS", "").split(",") if k.strip()
+        ]
+    )
 
 
 @dataclass(frozen=True)

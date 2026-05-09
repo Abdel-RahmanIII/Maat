@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from langchain_core.load import dumpd, load
+
 
 class ConversationContext:
     """Per-game conversation history, keyed by agent_id.
@@ -37,3 +39,31 @@ class ConversationContext:
         failures within a turn must NOT be added.
         """
         self._histories.setdefault(agent_id, []).extend(messages)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize the conversation histories to a dictionary.
+
+        Uses LangChain's ``dumpd`` to properly serialize BaseMessage
+        subclasses (HumanMessage, AIMessage, etc.) into JSON-safe dicts.
+        """
+        return {
+            "histories": {
+                agent_id: [dumpd(msg) for msg in msgs]
+                for agent_id, msgs in self._histories.items()
+            }
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ConversationContext:
+        """Deserialize from a dictionary.
+
+        Uses LangChain's ``load`` to reconstruct BaseMessage objects
+        from their serialized dict representations.
+        """
+        instance = cls()
+        raw_histories = data.get("histories", {})
+        instance._histories = {
+            agent_id: [load(msg) for msg in msgs]
+            for agent_id, msgs in raw_histories.items()
+        }
+        return instance

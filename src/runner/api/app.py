@@ -32,7 +32,6 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 from src.runner.api.ws import ConnectionManager
 from src.runner.core.orchestrator import Orchestrator
-from src.runner.limiting.rate_limiter import get_rate_limiter
 from src.runner.paths import dashboard_path, project_root, runner_config_path
 
 logger = logging.getLogger(__name__)
@@ -72,15 +71,6 @@ def create_app() -> FastAPI:
     rate_cfg = runner_cfg.get("rate_limits", {})
     concurrency_cfg = runner_cfg.get("concurrency", {})
 
-    # Configure rate limiter
-    limiter = get_rate_limiter()
-    limiter.configure(
-        rpm=rate_cfg.get("rpm", 15),
-        rpd=rate_cfg.get("rpd", 1500),
-        tpm=rate_cfg.get("tpm"),
-        project_root=project_root(),
-    )
-
     # Create orchestrator
     orchestrator = Orchestrator(
         max_concurrent_per_condition=concurrency_cfg.get(
@@ -91,7 +81,6 @@ def create_app() -> FastAPI:
 
     # Store in app state
     app.state.orchestrator = orchestrator
-    app.state.limiter = limiter
 
     # ── Dashboard ────────────────────────────────────────────────────
 
@@ -108,32 +97,32 @@ def create_app() -> FastAPI:
 
     @app.post("/api/start")
     async def start_experiments(body: dict[str, Any]) -> JSONResponse:
-        """Start experiments.
+        """Start a single experiment and condition.
 
         Body::
 
             {
-                "experiments": [
-                    {"id": 1, "conditions": ["A", "B", "C", "D", "E", "F"]},
-                    {"id": 2, "conditions": ["A", "B"]}
-                ],
-                "parallel_experiments": false,
-                "generation_strategy": "generator_only"
+                "experiment": 1,
+                "condition": "A",
+                "generation_strategy": "generator_only",
+                "n_runners": 5
             }
         """
 
         try:
-            experiments = body.get("experiments", [])
-            parallel = body.get("parallel_experiments", False)
+            experiment = body.get("experiment")
+            condition = body.get("condition")
             gen_strategy = body.get("generation_strategy", "generator_only")
+            n_runners = body.get("n_runners", 5)
 
-            if not experiments:
-                return JSONResponse({"error": "No experiments specified"}, status_code=400)
+            if experiment is None or not condition:
+                return JSONResponse({"error": "experiment and condition are required"}, status_code=400)
 
             orchestrator.start(
-                experiments,
-                parallel_experiments=parallel,
+                experiment=int(experiment),
+                condition=str(condition),
                 generation_strategy=gen_strategy,
+                n_runners=int(n_runners),
             )
             return JSONResponse({"status": "started"})
         except RuntimeError as e:
@@ -156,7 +145,10 @@ def create_app() -> FastAPI:
 
     @app.get("/api/rate-limits")
     async def rate_limits() -> JSONResponse:
-        return JSONResponse(limiter.get_status())
+        from src.runner.requests.manager import get_global_manager
+        rm = get_global_manager()
+        status = {"status": "Running"} if rm else {"status": "Stopped"}
+        return JSONResponse(status)
 
     @app.get("/api/experiments")
     async def list_experiments() -> JSONResponse:
@@ -186,18 +178,8 @@ def create_app() -> FastAPI:
     @app.post("/api/config")
     async def update_config(body: dict[str, Any]) -> JSONResponse:
         """Update runner configuration at runtime.
-
-        Only rate limits are applied dynamically.
+        (Rate limiter dynamic updating removed, handled by RequestsManager setup).
         """
-
-        if "rate_limits" in body:
-            rl = body["rate_limits"]
-            limiter.configure(
-                rpm=rl.get("rpm", rate_cfg.get("rpm", 15)),
-                rpd=rl.get("rpd", rate_cfg.get("rpd", 1500)),
-                tpm=rl.get("tpm", rate_cfg.get("tpm")),
-                project_root=project_root(),
-            )
         return JSONResponse({"status": "updated"})
 
     # ── WebSocket ────────────────────────────────────────────────────
