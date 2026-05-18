@@ -12,7 +12,7 @@ from src.agents.base import (
     get_side_to_move,
     load_agent_prompt,
 )
-from src.llm.llm_client import get_model
+from src.llm.llm_client import invoke_llm_timed
 from src.config import ModelConfig
 from src.state import InputMode
 
@@ -49,20 +49,19 @@ def generate_move(
         feedback_block=feedback_block,
     )
 
-    model = get_model(model_config)
-
     messages: list[Any] = [SystemMessage(content=system_text)]
     if conversation_history:
         messages.extend(conversation_history)
     human_msg = HumanMessage(content=prompt_text)
     messages.append(human_msg)
 
-    response = model.invoke(messages)
+    response, elapsed_ms = invoke_llm_timed(messages, model_config)
 
     usage = response.usage_metadata or {}
     return {
         "raw_output": response.content.strip() if isinstance(response.content, str) else str(response.content).strip(),
         "prompt_tokens": usage.get("input_tokens", 0),
         "completion_tokens": usage.get("output_tokens", 0),
+        "elapsed_ms": elapsed_ms,
         "turn_messages": [human_msg, response],
     }

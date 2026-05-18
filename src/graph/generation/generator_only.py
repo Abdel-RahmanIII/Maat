@@ -10,7 +10,7 @@ from langgraph.graph.state import CompiledStateGraph
 from src.agents.generator import generate_move
 from src.config import ModelConfig
 from src.context import ConversationContext
-from src.graph.base_graph import parse_and_validate
+from src.graph.base_graph import parse_only
 from src.state import TurnState
 
 
@@ -36,6 +36,8 @@ def build_generator_only_subgraph(
             model_config=cfg,
             conversation_history=history,
         )
+        pending = dict(state.get("messages", {}))
+        pending["generator"] = list(result.get("turn_messages", []))
         return {
             "raw_llm_response": result["raw_output"],
             "prompt_token_count": state["prompt_token_count"] + result["prompt_tokens"],
@@ -45,15 +47,17 @@ def build_generator_only_subgraph(
                 + result["completion_tokens"]
             ),
             "llm_calls_this_turn": state["llm_calls_this_turn"] + 1,
+            "wall_clock_ms": state["wall_clock_ms"] + result["elapsed_ms"],
             "strategic_plan": "",
-            "threat_report": "",
+            "observation_summary": "",
             "_gen_raw_output": result["raw_output"],
+            "messages": pending,
         }
 
     def _parse_validate(state: TurnState) -> dict[str, Any]:
-        """Parse the raw LLM output and validate it against python-chess."""
+        """Parse the raw LLM output (no legality validation)."""
 
-        pv = parse_and_validate(state["_gen_raw_output"], state["board_fen"])
+        pv = parse_only(state["_gen_raw_output"], state["board_fen"])
         attempts = state["total_attempts"] + 1
 
         error_types = list(state["error_types"])
@@ -63,9 +67,7 @@ def build_generator_only_subgraph(
         return {
             "proposed_move": pv["proposed_move"],
             "is_valid": pv["is_valid"],
-            "first_try_valid": (
-                pv["is_valid"] if attempts == 1 else state["first_try_valid"]
-            ),
+            "error_reason": pv["error_reason"],
             "total_attempts": attempts,
             "error_types": error_types,
         }

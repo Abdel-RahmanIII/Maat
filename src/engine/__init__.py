@@ -4,7 +4,7 @@ This package provides:
 
 - :class:`StockfishWrapper` — Thin wrapper around a UCI Stockfish binary.
 - :func:`dispatch_turn` — Centralized condition router.
-- :func:`dispatch_turn_with_backoff` — Dispatcher with exponential backoff.
+
 - :class:`PuzzleManager` — Experiment 1 orchestrator.
 - :class:`GameManager` — Experiments 2 & 3 orchestrator.
 - Result persistence utilities in :mod:`result_store`.

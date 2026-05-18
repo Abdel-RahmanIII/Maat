@@ -2,6 +2,6 @@
 
 This package contains the control-plane logic that is independent from HTTP:
 
-- `Orchestrator` which schedules workers and manages lifecycle state.
-- Thread-safe progress trackers surfaced to the dashboard.
+- `Orchestrator` which schedules runners and manages lifecycle state.
+- Disk-based progress tracking surfaced to the dashboard.
 """

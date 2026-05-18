@@ -21,7 +21,7 @@ def build_generation_subgraph(
     - Populates: ``proposed_move``, ``is_valid``, ``error_types``,
       ``first_try_valid``, ``total_attempts``, ``llm_calls_this_turn``,
       ``tokens_this_turn``, ``prompt_token_count``, ``strategic_plan``,
-      ``threat_report``, ``raw_llm_response``
+      ``observation_summary``, ``raw_llm_response``
 
     Parameters
     ----------
@@ -38,10 +38,15 @@ def build_generation_subgraph(
 
         return build_planner_actor_subgraph(model_config, context)
 
-    if strategy == GenerationStrategy.THREAT_ANALYST.value:
-        from src.graph.generation.threat_analyst import build_threat_analyst_subgraph
+    if strategy == GenerationStrategy.OBSERVER_STRATEGIST_TACTICIAN.value:
+        from src.graph.generation.observer_strategist_tactician import build_observer_strategist_tactician_subgraph
 
-        return build_threat_analyst_subgraph(model_config, context)
+        return build_observer_strategist_tactician_subgraph(model_config, context)
+
+    if strategy == GenerationStrategy.OBSERVER_EXECUTOR.value:
+        from src.graph.generation.observer_executor import build_observer_executor_subgraph
+
+        return build_observer_executor_subgraph(model_config, context)
 
     # Default: generator_only
     from src.graph.generation.generator_only import build_generator_only_subgraph

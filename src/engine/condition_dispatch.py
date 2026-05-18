@@ -81,7 +81,7 @@ def dispatch_turn(
         ``"fen"`` (Exp 1 & 2) or ``"history"`` (Exp 3).
     generation_strategy:
         ``"generator_only"``, ``"planner_actor"``, or
-        ``"threat_analyst"``.
+        ``"observer_executor"``.
     model_config:
         LLM model configuration.
     max_react_steps:
@@ -101,7 +101,7 @@ def dispatch_turn(
     # Condition F uses a LangGraph StateGraph like B-E but takes
     # max_steps instead of generation_strategy.
     if condition == "F":
-        return runner(
+        state = runner(
             fen=fen,
             move_history=history,
             move_number=move_number,
@@ -111,8 +111,10 @@ def dispatch_turn(
             model_config=model_config,
             context=context,
         )
+        state["wall_clock_ms"] = float(state.get("wall_clock_ms", 0.0) or 0.0)
+        return state
 
-    return runner(
+    state = runner(
         fen=fen,
         move_history=history,
         move_number=move_number,
@@ -122,6 +124,8 @@ def dispatch_turn(
         model_config=model_config,
         context=context,
     )
+    state["wall_clock_ms"] = float(state.get("wall_clock_ms", 0.0) or 0.0)
+    return state
 
 
 

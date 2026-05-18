@@ -82,7 +82,7 @@ variants:
 | `max_output_tokens` | `1024` | Maximum response length |
 | `max_retries` | Condition-dependent (0 or 3) | Max retry attempts for validation loops |
 | `max_react_steps` | `6` | Max think-act cycles for Condition F |
-| `generation_strategy` | `generator_only` | One of: `generator_only`, `planner_actor`, `router_specialists` |
+| `generation_strategy` | `generator_only` | One of: `generator_only`, `planner_actor`, `observer_executor`, `observer_strategist_tactician` |
 | `input_mode` | `fen` | `fen` (full board) or `history` (move list only) |
 
 ## Experiment YAML Configurations

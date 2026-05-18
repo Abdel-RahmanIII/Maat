@@ -1,9 +1,7 @@
 import pytest
-import threading
 from unittest.mock import patch, MagicMock
 
 from src.engine.puzzle_manager import PuzzleManager
-from src.metrics.collector import MetricsCollector
 
 @pytest.fixture
 def tmp_output_dir(tmp_path):
@@ -21,67 +19,59 @@ def manager(tmp_output_dir):
         generation_strategy="test_strategy"
     )
 
-def test_puzzle_manager_stop_event(manager):
-    stop_event = threading.Event()
-    stop_event.set()  # Immediate stop
-    
-    events_emitted = []
-    def on_progress(event):
-        events_emitted.append(event)
-        
-    puzzle = manager.puzzles[0]
-    record = manager.run_single(
-        puzzle=puzzle,
-        condition="A",
-        stop_event=stop_event,
-        on_progress=on_progress
-    )
-    
-    assert record is None
-    assert events_emitted[0]["status"] == "running"
-    assert events_emitted[-1]["status"] == "stopped"
-
-def test_puzzle_manager_pause_event(manager):
-    pause_event = threading.Event()
-    pause_event.clear()  # Not set -> paused
-    
-    events_emitted = []
-    def on_progress(event):
-        events_emitted.append(event)
-        if event.get("status") == "paused":
-            pause_event.set()  # Resume so it finishes
-            
-    # Mock dispatch_turn so it doesn't do a real LLM call
+def test_puzzle_manager_run_single_returns_record(manager):
     with patch("src.engine.puzzle_manager.dispatch_turn") as mock_dispatch:
-        mock_dispatch.return_value = {"game_status": "completed"}
-        
+        mock_dispatch.return_value = {
+            "game_status": "completed",
+            "board_fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            "move_number": 1,
+            "wall_clock_ms": 12.5,
+            "is_valid": True,
+            "proposed_move": "e2e4",
+        }
+
         puzzle = manager.puzzles[0]
         record = manager.run_single(
             puzzle=puzzle,
             condition="A",
-            pause_event=pause_event,
-            on_progress=on_progress
         )
-        
+
     assert record is not None
-    assert any(e.get("status") == "paused" for e in events_emitted)
-    assert any(e.get("status") == "running" for e in events_emitted)
+    assert record.total_turns == 1
+    assert record.final_status == "completed"
 
-def test_puzzle_manager_on_progress_events(manager):
-    events_emitted = []
-    def on_progress(event):
-        events_emitted.append(event)
-        
+def test_puzzle_manager_run_single_normalizes_condition(manager):
     with patch("src.engine.puzzle_manager.dispatch_turn") as mock_dispatch:
-        mock_dispatch.return_value = {"game_status": "completed"}
-        
+        mock_dispatch.return_value = {
+            "game_status": "completed",
+            "board_fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            "move_number": 1,
+            "wall_clock_ms": 10.0,
+            "is_valid": True,
+            "proposed_move": "e2e4",
+        }
+
         puzzle = manager.puzzles[0]
-        record = manager.run_single(
+        record = manager.run_single(puzzle=puzzle, condition="a")
+
+    assert record is not None
+    assert record.condition == "A"
+
+def test_puzzle_manager_run_single_dispatch_invoked(manager):
+    with patch("src.engine.puzzle_manager.dispatch_turn") as mock_dispatch:
+        mock_dispatch.return_value = {
+            "game_status": "completed",
+            "board_fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            "move_number": 1,
+            "wall_clock_ms": 8.0,
+            "is_valid": True,
+            "proposed_move": "e2e4",
+        }
+
+        puzzle = manager.puzzles[0]
+        manager.run_single(
             puzzle=puzzle,
             condition="A",
-            on_progress=on_progress
         )
-         
-    types_emitted = [e["type"] for e in events_emitted]
-    assert "worker_status" in types_emitted
-    assert "game_complete" in types_emitted
+
+    assert mock_dispatch.call_count == 1

@@ -25,7 +25,6 @@ EXPECTED_TURN_STATE_FIELDS = {
     "ground_truth_verdict",
     "generation_strategy",
     "strategic_plan",
-    "threat_report",
     "game_id",
     "condition",
     "turn_results",

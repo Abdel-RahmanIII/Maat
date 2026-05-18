@@ -23,7 +23,7 @@ Maat is a Python codebase for research experiments on chess-playing LLM architec
 - 9 prompt templates for all agent roles (`src/prompts/`)
 - 10 agent modules: generator, critic, explainer, ReAct, strategist, tactician, router, specialists (`src/agents/`)
 - 6 condition graphs implementing all experimental conditions A–F (`src/graph/`)
-- 3 swappable generation strategies: generator_only, planner_actor, router_specialists
+- 4 swappable generation strategies: generator_only, planner_actor, observer_executor, observer_strategist_tactician
 
 ### Phase 3 — Metrics
 

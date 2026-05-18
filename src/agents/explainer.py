@@ -9,7 +9,7 @@ import chess
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from src.agents.base import get_side_to_move, load_agent_prompt
-from src.llm.llm_client import get_model
+from src.llm.llm_client import invoke_llm_timed
 from src.config import ModelConfig
 from src.state import InputMode
 
@@ -21,6 +21,7 @@ class ExplainerResult(TypedDict):
     raw_output: str
     prompt_tokens: int
     completion_tokens: int
+    elapsed_ms: float
 
 
 def explain_error(
@@ -55,13 +56,12 @@ def explain_error(
         error_type=error_type,
     )
 
-    model = get_model(model_config)
     messages = [
         SystemMessage(content=system_text),
         HumanMessage(content=prompt_text),
     ]
 
-    response = model.invoke(messages)
+    response, elapsed_ms = invoke_llm_timed(messages, model_config)
     raw = response.content.strip() if isinstance(response.content, str) else str(response.content).strip()
     usage = response.usage_metadata or {}
 
@@ -84,6 +84,7 @@ def explain_error(
         "raw_output": raw,
         "prompt_tokens": usage.get("input_tokens", 0),
         "completion_tokens": usage.get("output_tokens", 0),
+        "elapsed_ms": elapsed_ms,
     }
 
 

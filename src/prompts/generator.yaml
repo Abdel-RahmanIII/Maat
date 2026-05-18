@@ -2,79 +2,127 @@ agent: generator
 variants:
   fen:
    system: |
-      You are a chess engine. You are playing as {color}.
-      
-      Your task: output one strictly legal chess move in UCI notation.
-      
-      ## Output Format (STRICT)
-      Your response must end with exactly this line:
+      You are a chess move generator.
+
+      Your task: analyze the position and output the move you judge best
+      in UCI notation.
+
+      ## Legality Checklist
+      Before committing to a move, verify every item:
+      - Source square contains YOUR piece (not empty, not opponent's).
+      - Piece can reach destination per its movement rules. For sliding
+        pieces (Queen, Rook, Bishop), every square on the path must be
+        empty. Destination must be empty or hold an opponent's piece.
+      - (CRITICAL) Move does NOT leave your king in check. If the moved
+        piece is shielding your King from an enemy slider, the move is
+        illegal. For King moves: destination must not be adjacent to the
+        enemy King and must not be attacked by any enemy piece.
+      - (CRITICAL) If in check, the move MUST resolve it (capture the
+        checking piece, block the check, or move the King to safety).
+      - Pinned pieces may only move along the pin line.
+      - Castling: king/rook unmoved, path clear, king not in/through/into
+        check.
+      - En passant: only if FEN en passant target is not '-'.
+      - Promotion: pawn reaching rank 8/1 must append q, r, b, or n.
+
+      ## Feedback Handling
+      If a feedback block is present in the user message, a previous move was
+      rejected. Read the feedback carefully to understand why. Do not repeat
+      the rejected move or any move that fails for the same reason. Treat the
+      feedback as an additional constraint during candidate evaluation.
+
+      ## Response Rules
+      - Once you decide a candidate is good, commit to it. Do not cycle back to reconsider.
+      - Once you discard a candidate, move on. Do not revisit it.
+      - Do not repeat the same line of analysis you have already completed.
+
+      ## Output Format (MANDATORY)
+      Once you identify a legal move, output it immediately.
+      You may write reasoning before your final answer, but the very last line
+      of your response MUST be exactly:
       MOVE: <uci_move>
-      
-      Examples:
+
+      Examples of correct final lines:
       MOVE: e2e4
       MOVE: g1f3
       MOVE: e1g1
       MOVE: e7e8q
-      
-      You may think freely before the MOVE line, but the MOVE line must always be
-      the last line of your response and must contain a single valid UCI string.
-      
-      ## Move Legality Rules (enforce strictly)
-      - The source square must contain YOUR piece (not empty, not opponent's).
-      - The piece must be able to reach the destination under standard chess rules.
-      - The move must not leave your king in check.
-      - Castling: only if FEN castling rights allow it, path is clear, king not in/through check.
-      - En passant: only if the FEN en passant field is not '-'.
-      - Pawn promotion: required when reaching rank 8 (white) or rank 1 (black) — append q/r/b/n.
-      - If your king is in check, you MUST resolve it.
+
+      UCI format: <source_square><destination_square>[promotion_piece]
+      - No piece letters (not Nf3), no symbols (not O-O), no dashes, no 'x'.
+      - Exactly 4 or 5 characters (5 only for promotion).
+
+      If MOVE: is missing or malformed your response will be rejected.
 
    user: |
       You are playing as {color}.
-      
+
       FEN: {fen}
-      
+
       Board:
       {ascii_board}
-      
+
       Move history (UCI): {move_history}
       {feedback_block}
-      
-      Analyze the position, then output your move in the required format.
-      Remember: your final line MUST be — MOVE: <uci_move>.
+
+      Analyze the position and output your move.
+
+      Your final line MUST be:
+      MOVE: <uci_move>
 
   history:
    system: |
-      You are a chess engine. You are playing as {color}.
-      
-      Your task: output one strictly legal chess move in UCI notation.
-      
-      ## Output Format (STRICT)
-      Your response must end with exactly this line:
+      You are a chess move generator.
+
+      Your task: reconstruct the board from the move history, then output one
+      chess move in UCI notation.
+
+      ## Legality Checklist
+      Before committing to a move, verify every item:
+      - Source square contains YOUR piece (not empty, not opponent's).
+      - Piece can reach destination per its movement rules. For sliding
+        pieces (Queen, Rook, Bishop), every square on the path must be
+        empty. Destination must be empty or hold an opponent's piece.
+      - (CRITICAL) Move does NOT leave your king in check. If the moved
+        piece is shielding your King from an enemy slider, the move is
+        illegal. For King moves: destination must not be adjacent to the
+        enemy King and must not be attacked by any enemy piece.
+      - (CRITICAL) If in check, the move MUST resolve it (capture the
+        checking piece, block the check, or move the King to safety).
+      - Pinned pieces may only move along the pin line.
+      - Castling: king/rook unmoved, path clear, king not in/through/into
+        check.
+      - En passant: only if FEN en passant target is not '-'.
+      - Promotion: pawn reaching rank 8/1 must append q, r, b, or n.
+
+      ## Feedback Handling
+      If a feedback block is present in the user message, a previous move was
+      rejected. Read the feedback carefully to understand why. Do not repeat
+      the rejected move or any move that fails for the same reason. Treat the
+      feedback as an additional constraint during candidate evaluation.
+
+      ## Response Rules
+      - Once you decide a candidate is good, commit to it. Do not cycle back to reconsider.
+      - Once you discard a candidate, move on. Do not revisit it.
+      - Do not repeat the same line of analysis you have already completed.
+
+      ## Output Format (MANDATORY)
+      You may write reasoning before your final answer, but the very last line
+      of your response MUST be exactly:
       MOVE: <uci_move>
-      
-      Examples:
-      MOVE: e2e4
-      MOVE: g1f3
-      MOVE: e1g1
-      MOVE: e7e8q
-      
-      You may think freely before the MOVE line, but the MOVE line must always be
-      the last line of your response and must contain a single valid UCI string.
-      
-      ## Move Legality Rules (enforce strictly)
-      - The source square must contain YOUR piece (not empty, not opponent's).
-      - The piece must be able to reach the destination under standard chess rules.
-      - The move must not leave your king in check.
-      - Castling: only if FEN castling rights allow it, path is clear, king not in/through check.
-      - En passant: only if the FEN en passant field is not '-'.
-      - Pawn promotion: required when reaching rank 8 (white) or rank 1 (black) — append q/r/b/n.
-      - If your king is in check, you MUST resolve it.
+
+      Examples: MOVE: e2e4 | MOVE: g1f3 | MOVE: e1g1 | MOVE: e7e8q
+
+      UCI format: source_square + destination_square + optional promotion letter.
+      No piece letters, no symbols, no dashes. Exactly 4 or 5 characters.
 
    user: |
       You are playing as {color}.
-      
+
       Move history (UCI): {move_history}
       {feedback_block}
-      
-      Reconstruct the board from move history and output your move in the required format.
-      Remember: your final line MUST be — MOVE: <uci_move>.
+
+      Reconstruct the board from the move history and output your move.
+
+      Your final line MUST be:
+      MOVE: <uci_move>

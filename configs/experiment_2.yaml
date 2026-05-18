@@ -10,7 +10,7 @@ conditions: ["A", "B"]
 input_mode: "fen"
 
 # 50 fixed starting positions (shared with Exp 3 for pairing)
-starting_positions: "configs/starting_positions.txt"
+starting_positions: "src/data/Experiment 2/experiment_imputs.josnl"
 
 # Game parameters
 max_half_moves: 150
@@ -28,7 +28,7 @@ backoff_max: 60.0
 
 # Stockfish opponent
 stockfish:
-  elo: 1000
+  elo: 1500
   path: null  # auto-detect from PATH or STOCKFISH_PATH env var
 
 # Generation strategy
@@ -39,3 +39,5 @@ model:
   model_name: "gemma-4-31b-it"
   temperature: 0.0
   max_output_tokens: 1024
+  call_mode: "queue"
+

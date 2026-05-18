@@ -33,7 +33,8 @@ Strategy routing:
 
 - `generator_only` -> `generate_move(...)`
 - `planner_actor` -> `create_plan(...)` then `execute_plan(...)`
-- `router_specialists` -> `classify_phase(...)` then `generate_specialist_move(...)`
+- `observer_strategist_tactician` -> `observe_position(...)` then `create_plan_from_observation(...)` then `execute_plan_from_observation(...)`
+- `observer_executor` -> `observe_position(...)` then `execute_from_observation(...)`
 
 Return payload includes:
 

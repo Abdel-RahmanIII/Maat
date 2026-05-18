@@ -10,7 +10,7 @@ puzzle_data: "src/data/Experiment 1/experiment_inputs.jsonl"
 # Output directory for results (JSONL, CSV, checkpoints)
 output_dir: "results/exp1"
 
-# Generation strategy: generator_only | planner_actor | router_specialists
+# Generation strategy: generator_only | planner_actor | observer-excutor
 generation_strategy: "generator_only"
 
 # Rate limiting
@@ -26,3 +26,4 @@ model:
   model_name: "gemma-4-31b-it"
   temperature: 0.0
   max_output_tokens: 1024
+  call_mode: "queue"

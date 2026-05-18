@@ -30,7 +30,7 @@ class TurnState(TypedDict):
     feedback_history: list[str]
 
     # Messages
-    messages: list[Any]
+    messages: dict[str, list[Any]] | list[Any]
 
     # Turn metrics
     first_try_valid: bool
@@ -47,10 +47,13 @@ class TurnState(TypedDict):
     critic_verdict: bool | None
     ground_truth_verdict: bool | None
 
+    # Symbolic-specific (Condition D)
+    error_reason: str
+
     # Generation strategy metadata
     generation_strategy: str
     strategic_plan: str  # NL plan from strategist (planner_actor)
-    threat_report: str  # Structured threat report (threat_analyst)
+    observation_summary: str  # NL board description (observer_executor)
 
     # Raw LLM output (full text response)
     raw_llm_response: str
@@ -91,9 +94,10 @@ def create_initial_turn_state(
         "retry_count": 0,
         "max_retries": max_retries,
         "feedback_history": [],
-        "messages": [],
+        "messages": {},
         "first_try_valid": False,
         "error_types": [],
+        "error_reason": "",
         "tool_calls": [],
         "total_attempts": 0,
         "llm_calls_this_turn": 0,
@@ -105,7 +109,7 @@ def create_initial_turn_state(
         "ground_truth_verdict": None,
         "generation_strategy": "generator_only",
         "strategic_plan": "",
-        "threat_report": "",
+        "observation_summary": "",
         "raw_llm_response": "",
         "react_steps_taken": 0,
         "max_react_steps": 0,

@@ -13,9 +13,10 @@ from langgraph.graph.state import CompiledStateGraph
 
 from src.config import ModelConfig
 from src.context import ConversationContext
-from src.graph.base_graph import snapshot_turn_result
+from src.graph.base_graph import persist_successful_turn_context, snapshot_turn_result
 from src.graph.generation import build_generation_subgraph
 from src.state import InputMode, TurnState, create_initial_turn_state
+from src.validators.symbolic import validate_move
 
 
 # ── Graph builder ─────────────────────────────────────────────────────────
@@ -42,7 +43,29 @@ def build_graph(
             "turn_results": state["turn_results"] + [snapshot_turn_result(state)],
         }
 
+    def _ground_truth_node(state: TurnState) -> dict[str, Any]:
+        result = validate_move(state["board_fen"], state["proposed_move"])
+
+        error_types = list(state["error_types"])
+        if not result["valid"] and result["error_type"]:
+            error_types.append(result["error_type"])
+
+        updates: dict[str, Any] = {
+            "is_valid": result["valid"],
+            "ground_truth_verdict": result["valid"],
+            "error_reason": result["reason"],
+            "error_types": error_types,
+        }
+        if state["total_attempts"] == 1:
+            updates["first_try_valid"] = result["valid"]
+        return updates
+
     def _route_after_generate(state: TurnState) -> str:
+        if state["is_valid"]:
+            return "ground_truth"
+        return "forfeit"
+
+    def _route_after_ground_truth(state: TurnState) -> str:
         if state["is_valid"]:
             return "accept"
         return "forfeit"
@@ -50,6 +73,7 @@ def build_graph(
     graph = StateGraph(TurnState)
 
     graph.add_node("generate", gen_subgraph)
+    graph.add_node("ground_truth", _ground_truth_node)
     graph.add_node("accept", _accept_node)
     graph.add_node("forfeit", _forfeit_node)
 
@@ -57,6 +81,11 @@ def build_graph(
     graph.add_conditional_edges(
         "generate",
         _route_after_generate,
+        {"ground_truth": "ground_truth", "forfeit": "forfeit"},
+    )
+    graph.add_conditional_edges(
+        "ground_truth",
+        _route_after_ground_truth,
         {"accept": "accept", "forfeit": "forfeit"},
     )
     graph.add_edge("accept", END)
@@ -90,4 +119,9 @@ def run_condition_b(
     state["generation_strategy"] = generation_strategy
 
     compiled = build_graph(model_config, generation_strategy, context)
-    return cast(TurnState, compiled.invoke(state))
+    state = cast(TurnState, compiled.invoke(state))
+    
+    if state.get("is_valid"):
+        persist_successful_turn_context(state, context)
+    
+    return state

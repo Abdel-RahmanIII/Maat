@@ -20,7 +20,16 @@ class GenerationStrategy(str, Enum):
 
     GENERATOR_ONLY = "generator_only"
     PLANNER_ACTOR = "planner_actor"
+    OBSERVER_STRATEGIST_TACTICIAN = "observer_strategist_tactician"
+    OBSERVER_EXECUTOR = "observer_executor"
     THREAT_ANALYST = "threat_analyst"
+
+
+class LLMCallMode(str, Enum):
+    """How LLM calls are executed."""
+
+    DIRECT = "direct"
+    QUEUE = "queue"
 
 
 class Condition(str, Enum):
@@ -41,12 +50,19 @@ class ModelConfig:
     model_name: str = "gemma-4-31b-it"
     temperature: float = 0.0
     max_output_tokens: int = 1024
-    api_key: str = field(default_factory=lambda: os.environ.get("GOOGLE_API_KEY", ""))
+    api_key: str = field(
+        default_factory=lambda: (
+            [k.strip() for k in os.environ.get("GOOGLE_API_KEY", "").split(",") if k.strip()][0]
+            if [k.strip() for k in os.environ.get("GOOGLE_API_KEY", "").split(",") if k.strip()]
+            else ""
+        )
+    )
     api_keys: list[str] = field(
         default_factory=lambda: [
-            k.strip() for k in os.environ.get("GOOGLE_API_KEYS", "").split(",") if k.strip()
+            k.strip() for k in os.environ.get("GOOGLE_API_KEY", "").split(",") if k.strip()
         ]
     )
+    call_mode: LLMCallMode = field(default=LLMCallMode.DIRECT)
 
 
 @dataclass(frozen=True)

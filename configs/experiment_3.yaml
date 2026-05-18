@@ -9,7 +9,7 @@ conditions: ["A", "B"]
 input_mode: "history"
 
 # Same starting positions as Exp 2 (required for paired Wilcoxon tests)
-starting_positions: "configs/starting_positions.txt"
+starting_positions: "src/data/Experiment 2/experiment_imputs.josnl"
 
 # Game parameters
 max_half_moves: 150
@@ -27,7 +27,7 @@ backoff_max: 60.0
 
 # Stockfish opponent
 stockfish:
-  elo: 1000
+  elo: 1500
   path: null  # auto-detect from PATH or STOCKFISH_PATH env var
 
 # Generation strategy

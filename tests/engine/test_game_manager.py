@@ -36,7 +36,7 @@ def test_checkpointing_directory_and_cleanup(manager, tmp_output_dir):
         gid = "exp2_A_game000"
         cond = "A"
         strat = manager.generation_strategy
-        expected_path = tmp_output_dir / ".midgame_checkpoints" / f"{cond}_{strat}" / f"{gid}.json"
+        expected_path = tmp_output_dir / f"{strat}_{cond}" / "checkpoints" / f"{gid}.jsonl"
         
         if expected_path.exists():
             checkpoints_seen.append(expected_path)
@@ -61,7 +61,7 @@ def test_checkpointing_directory_and_cleanup(manager, tmp_output_dir):
     gid = "exp2_A_game000"
     cond = "A"
     strat = manager.generation_strategy
-    final_checkpoint = tmp_output_dir / ".midgame_checkpoints" / f"{cond}_{strat}" / f"{gid}.json"
+    final_checkpoint = tmp_output_dir / f"{strat}_{cond}" / "checkpoints" / f"{gid}.jsonl"
     assert not final_checkpoint.exists()
 
 def test_resume_from_state(manager, tmp_output_dir):
@@ -153,7 +153,7 @@ def test_game_manager_stop_event(manager, tmp_output_dir):
     gid = "exp2_A_game000"
     cond = "A"
     strat = manager.generation_strategy
-    checkpoint_path = tmp_output_dir / ".midgame_checkpoints" / f"{cond}_{strat}" / f"{gid}.json"
+    checkpoint_path = tmp_output_dir / f"{strat}_{cond}" / "checkpoints" / f"{gid}.jsonl"
     assert checkpoint_path.exists()
 
 def test_game_manager_pause_event(manager):

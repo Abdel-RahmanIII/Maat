@@ -15,7 +15,8 @@ Central experiment configuration: model settings, condition presets, and generat
 ```python
 GENERATOR_ONLY = "generator_only"
 PLANNER_ACTOR = "planner_actor"
-ROUTER_SPECIALISTS = "router_specialists"
+OBSERVER_EXECUTOR = "observer_executor"
+OBSERVER_STRATEGIST_TACTICIAN = "observer_strategist_tactician"
 ```
 
 ### `Condition` (Enum)

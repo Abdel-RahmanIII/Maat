@@ -30,7 +30,8 @@ Conditions A-E then set:
 - `state["generation_strategy"]` to one of:
   - `generator_only`
   - `planner_actor`
-  - `router_specialists`
+   - `observer_executor`
+   - `observer_strategist_tactician`
 
 Condition F always sets:
 

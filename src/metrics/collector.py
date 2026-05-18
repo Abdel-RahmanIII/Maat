@@ -120,7 +120,7 @@ def _build_turn_record(
             "ground_truth_verdict": state.get("ground_truth_verdict"),
             "generation_strategy": state.get("generation_strategy", "generator_only"),
             "strategic_plan": state.get("strategic_plan", ""),
-            "threat_report": state.get("threat_report", ""),
+            "observation_summary": state.get("observation_summary", ""),
             "feedback_history": list(state.get("feedback_history", [])),
             "board_fen": state.get("board_fen", ""),
             "raw_llm_response": state.get("raw_llm_response", ""),
@@ -202,8 +202,13 @@ class MetricsCollector:
             The structured turn record that was appended internally.
         """
 
-        # Compute wall-clock time
-        if self._turn_start_ns is not None:
+        # Prefer exact time accumulated in graph state (LLM/agent calls,
+        # plus tool execution time for Condition F). Fallback to legacy
+        # perf-counter turn timing for compatibility.
+        state_timing = state.get("wall_clock_ms")
+        if isinstance(state_timing, (int, float)):
+            wall_clock_ms = float(state_timing)
+        elif self._turn_start_ns is not None:
             elapsed_ns = time.perf_counter_ns() - self._turn_start_ns
             wall_clock_ms = elapsed_ns / 1_000_000
         else:

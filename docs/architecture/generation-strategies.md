@@ -1,6 +1,6 @@
 # Generation Strategies
 
-Maat supports three generation strategies, each representing a different
+Maat supports four generation strategies, each representing a different
 decomposition of the move-generation task.  All strategies are implemented
 as compiled LangGraph `StateGraph` subgraphs and are interchangeable via
 the `build_generation_subgraph()` factory.
@@ -34,7 +34,21 @@ produces a natural-language plan; the Tactician converts it into a move.
 On retry, the Strategist is **skipped** (plan cached in `TurnState.strategic_plan`)
 and only the Tactician re-runs with the original plan plus enforcement feedback.
 
-## 3. Threat-Analyst (TA)
+## 3. Observer-Strategist-Tactician (OST)
+
+**Observation → Strategy → Tactics decomposition.**
+
+- **Calls per first attempt**: 3
+- **Calls per retry**: 3 (Observer and Strategist re-run)
+- **Subgraph**: `observer_strategist_tactician.py`
+- **Flow**: `observer → strategist → tactician → parse_validate → END`
+- **Agents**: `observer.py`, `strategist.py`, `tactician.py`
+
+Decomposes generation into board observation, high-level planning, and tactical execution. The Observer produces a comprehensive board description, the Strategist reads only that description and turns it into a plan, and the Tactician combines the observer summary, the plan, and the raw FEN into a move.
+
+On retry, both the Observer and Strategist are re-run so the board description and plan are refreshed before the Tactician acts.
+
+## 4. Threat-Analyst (TA)
 
 **Analysis → Execution decomposition.**
 

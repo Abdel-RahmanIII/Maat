@@ -1,196 +1,201 @@
-"""Unified LLM client factory for all conditions."""
+"""Unified LLM client for all conditions."""
 
 from __future__ import annotations
 
-import logging
-import time
 import asyncio
-from itertools import count
+import time
 from typing import TYPE_CHECKING, Any, Sequence
 
-from google.genai import types
+import logging
+
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import Runnable
 from langchain_google_genai import ChatGoogleGenerativeAI
 
-from src.config import ModelConfig
+from src.config import ModelConfig, LLMCallMode
+from src.llm.prompt_logging import log_prompt
+from src.runner.requests.manager import get_global_manager
 
 if TYPE_CHECKING:
     from langchain_core.tools import BaseTool
 
 
-# ─── LOGGING SETUP ───────────────────────────────────────────────────
+logger = logging.getLogger(__name__)
 
 
-# Configure dedicated logger for API calls
-api_logger = logging.getLogger("maat.api")
-if not api_logger.handlers:
-    _handler = logging.StreamHandler()
-    _handler.setFormatter(logging.Formatter("%(asctime)s | %(message)s"))
-    api_logger.addHandler(_handler)
-api_logger.setLevel(logging.INFO)
-api_logger.propagate = False
+def beutifyOutput(output: Any) -> str:
+    """Return prompt-safe text from a model response or content blocks."""
 
-# Suppress noisy third-party logging from the underlying SDKs
-for _logger_name in ("httpx", "httpcore", "google_genai"):
-    logging.getLogger(_logger_name).setLevel(logging.WARNING)
+    content = output.content if isinstance(output, AIMessage) else output
 
-# Global counter to uniquely identify interleaved API calls
-_CALL_COUNTER = count(1)
+    if content is None:
+        return ""
 
+    if isinstance(content, str):
+        return content.strip()
 
-# ─── FORMATTING HELPERS ─────────────────────────────────────────────────────
+    if isinstance(content, Sequence) and not isinstance(content, (str, bytes, bytearray)):
+        cleaned_parts: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                text = block.strip()
+                if text:
+                    cleaned_parts.append(text)
+                continue
 
-def _truncate(value: str, max_len: int = 40) -> str:
-    """Truncate a string to max_len, appending '...' if shortened."""
-    single_line = " ".join(value.splitlines()).strip()
-    if len(single_line) <= max_len:
-        return single_line
-    return f"{single_line[:max_len-3]}..."
+            if isinstance(block, dict):
+                block_type = str(block.get("type", "")).strip().lower()
+                text = block.get("text")
+                if text is None:
+                    text = block.get("content")
 
-def _summarize_request(payload: Any) -> str:
-    """Provide a compact summary of the request payload (number of messages, total characters)."""
-    if isinstance(payload, list):
-        chars = sum(len(str(getattr(msg, "content", ""))) for msg in payload)
-        return f"msgs={len(payload)} chars={chars}"
-    return f"type={type(payload).__name__}"
+                if text is None:
+                    continue
 
-def _summarize_response(response: Any) -> str:
-    """Provide a compact summary of the model response (token usage, tool calls, or short text)."""
-    usage = getattr(response, "usage_metadata", {}) or {}
-    tool_calls = getattr(response, "tool_calls", None) or []
-    in_tok = int(usage.get("input_tokens", 0) or 0)
-    out_tok = int(usage.get("output_tokens", 0) or 0)
+                if block_type and block_type not in {"text", "output_text"} and "text" not in block and "content" not in block:
+                    continue
 
-    parts = [f"in={in_tok}", f"out={out_tok}"]
-    if tool_calls:
-        parts.append(f"tools={len(tool_calls)}")
-    else:
-        content = str(getattr(response, "content", "")).strip()
-        if content:
-            parts.append(f"text='{_truncate(content, 30)}'")
+                text_value = str(text).strip()
+                if text_value:
+                    cleaned_parts.append(text_value)
+                continue
 
-    return " ".join(parts)
+            text = getattr(block, "text", None)
+            if text is None:
+                text = getattr(block, "content", None)
+            if text is None:
+                continue
 
+            text_value = str(text).strip()
+            if text_value:
+                cleaned_parts.append(text_value)
 
-# ─── CLIENT WRAPPER ─────────────────────────────────────────────────────────
+        return "\n".join(cleaned_parts).strip()
 
-class LoggedModelRunnable(Runnable[Any, AIMessage]):
-    """Delegating wrapper that intercepts, logs, and rate-limits each model call."""
-
-    def __init__(self, runnable: Any, *, model_name: str, has_tools: bool) -> None:
-        self._runnable = runnable
-        self._model_name = model_name
-        self._has_tools = has_tools
-
-    def invoke(self, input: Any, config: Any = None, **kwargs: Any) -> AIMessage:
-        """Synchronously invoke the underlying model with logging."""
-        call_id = next(_CALL_COUNTER)
-        short_model = self._model_name.split("/")[-1]
-        tools_flag = "T" if self._has_tools else "F"
-
-        api_logger.info(
-            "[%s] ↗ req: %s tools=%s | %s",
-            call_id,
-            short_model,
-            tools_flag,
-            _summarize_request(input),
-        )
-        started = time.perf_counter()
-        
-        try:
-            response = self._runnable.invoke(input, config=config, **kwargs)
-            
-            elapsed_ms = (time.perf_counter() - started) * 1000
-            api_logger.info(
-                "[%s] ↘ ok: %.0fms | %s",
-                call_id,
-                elapsed_ms,
-                _summarize_response(response),
-            )
-
-            return response
-
-        except Exception as e:
-            elapsed_ms = (time.perf_counter() - started) * 1000
-            api_logger.exception("[%s] ↘ err: %.0fms | Failed.", call_id, elapsed_ms)
-            raise
-
-    async def ainvoke(self, input: Any, config: Any = None, **kwargs: Any) -> AIMessage:
-        """Asynchronously invoke the underlying model with logging."""
-        call_id = next(_CALL_COUNTER)
-        short_model = self._model_name.split("/")[-1]
-        tools_flag = "T" if self._has_tools else "F"
-
-        api_logger.info(
-            "[%s] ↗ req: %s tools=%s | %s",
-            call_id,
-            short_model,
-            tools_flag,
-            _summarize_request(input),
-        )
-        started = time.perf_counter()
-        
-        try:
-            response = await self._runnable.ainvoke(input, config=config, **kwargs)
-            
-            elapsed_ms = (time.perf_counter() - started) * 1000
-            api_logger.info(
-                "[%s] ↘ ok: %.0fms | %s",
-                call_id,
-                elapsed_ms,
-                _summarize_response(response),
-            )
-
-            return response
-
-        except Exception as e:
-            elapsed_ms = (time.perf_counter() - started) * 1000
-            api_logger.exception("[%s] ↘ err: %.0fms | Failed.", call_id, elapsed_ms)
-            raise
-
-    def __getattr__(self, name: str) -> Any:
-        # Delegate any other method/attribute accesses to the underlying runnable
-        return getattr(self._runnable, name)
+    return str(content).strip()
 
 
-# ─── FACTORY METHODS ────────────────────────────────────────────────────────
+def _normalize_ai_message(response: AIMessage) -> AIMessage:
+    """Ensure model output content is plain text before callers consume it."""
 
-def _build_model(cfg: ModelConfig | None = None) -> Any:
-    """Construct a QueuedChatModel instance based on configuration.
+    cleaned_content = beutifyOutput(response)
+    if isinstance(response.content, str) and response.content.strip() == cleaned_content:
+        return response
 
-    Uses the real API key from config so fallback mode (no RequestsManager)
-    still works for standalone testing.
-    """
-    from src.runner.requests.queued_model import QueuedChatModel
-    
+    try:
+        return response.model_copy(update={"content": cleaned_content})
+    except AttributeError:
+        response.content = cleaned_content
+        return response
+
+
+def _resolve_api_key(cfg: ModelConfig) -> str:
+    """Return the first usable API key for direct execution."""
+
+    if cfg.api_keys:
+        return cfg.api_keys[0]
+    if cfg.api_key:
+        return cfg.api_key
+    return ""
+
+def _build_direct_model(cfg: ModelConfig | None = None) -> ChatGoogleGenerativeAI:
+    """Construct a chat model instance for direct execution."""
+
     cfg = cfg or ModelConfig()
-
-    return QueuedChatModel(
+    return ChatGoogleGenerativeAI(
         model=cfg.model_name,
         temperature=cfg.temperature,
         max_output_tokens=cfg.max_output_tokens,
-        google_api_key=cfg.api_key,
+        google_api_key=_resolve_api_key(cfg),
+        max_retries=0,
     )
 
-def get_model(cfg: ModelConfig | None = None) -> Runnable[Any, AIMessage]:
-    """Return a configured, logged chat model (no tool bindings)."""
-    model = _build_model(cfg)
-    return LoggedModelRunnable(
-        model,
-        model_name=model.model,
-        has_tools=False,
+
+def _ensure_queue_manager(cfg: ModelConfig):
+    """Return the active queue manager or fail fast."""
+
+    manager = get_global_manager()
+    if manager is None or not manager._worker_thread.is_alive():
+        raise RuntimeError("ModelConfig.call_mode='queue' requires an active RequestsManager.")
+    return manager
+
+
+def invoke_llm(
+    messages: list[Any],
+    cfg: ModelConfig,
+    *,
+    tools: Sequence[BaseTool] | None = None,
+    **invoke_kwargs: Any,
+) -> AIMessage:
+    """Invoke the configured model using direct or queued execution."""
+
+    if cfg.call_mode == LLMCallMode.QUEUE:
+        manager = _ensure_queue_manager(cfg)
+        log_prompt(
+            logger,
+            messages,
+            model_name=cfg.model_name,
+            call_mode=cfg.call_mode.value,
+            prefix="[LLM] QUEUED PROMPT",
+        )
+        future = manager.submit(messages, tools=tools, invoke_kwargs=invoke_kwargs)
+        return _normalize_ai_message(future.result())
+
+    model = _build_direct_model(cfg)
+    log_prompt(
+        logger,
+        messages,
+        model_name=cfg.model_name,
+        call_mode=cfg.call_mode.value,
+        prefix="[LLM] DIRECT PROMPT",
     )
+    if tools:
+        model = model.bind_tools(tools)
+    return _normalize_ai_message(model.invoke(messages, **invoke_kwargs))
+
+
+def invoke_llm_timed(
+    messages: list[Any],
+    cfg: ModelConfig | None,
+    *,
+    tools: Sequence[BaseTool] | None = None,
+    **invoke_kwargs: Any,
+) -> tuple[AIMessage, float]:
+    """Invoke the model and return ``(response, elapsed_ms)``."""
+
+    start = time.perf_counter()
+    response = invoke_llm(messages, cfg or ModelConfig(), tools=tools, **invoke_kwargs)
+    elapsed_ms = (time.perf_counter() - start) * 1000
+    return response, elapsed_ms
+
+
+async def ainvoke_llm(
+    messages: list[Any],
+    cfg: ModelConfig,
+    *,
+    tools: Sequence[BaseTool] | None = None,
+    **invoke_kwargs: Any,
+) -> AIMessage:
+    """Async wrapper around :func:`invoke_llm`."""
+
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        None,
+        lambda: invoke_llm(messages, cfg, tools=tools, **invoke_kwargs),
+    )
+
+
+def get_model(cfg: ModelConfig | None = None) -> ChatGoogleGenerativeAI:
+    """Return a configured direct chat model."""
+
+    return _build_direct_model(cfg)
+
 
 def get_model_with_tools(
     tools: Sequence[BaseTool],
     cfg: ModelConfig | None = None,
 ) -> Runnable[Any, AIMessage]:
-    """Return a configured, logged chat model with the given tools bound."""
-    model = _build_model(cfg)
-    bound = model.bind_tools(tools)
-    return LoggedModelRunnable(
-        bound,
-        model_name=model.model,
-        has_tools=True,
-    )
+    """Return a configured direct chat model with the given tools bound."""
+
+    model = _build_direct_model(cfg)
+    return model.bind_tools(tools)

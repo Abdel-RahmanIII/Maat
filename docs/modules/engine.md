@@ -144,9 +144,6 @@ class PuzzleManager:
         model_config: ModelConfig | None = None,
         generation_strategy: str = "generator_only",
         delay_seconds: float = 0.0,
-        max_api_retries: int = 5,
-        backoff_base: float = 2.0,
-        backoff_max: float = 60.0,
     ) -> None
 
     def run_all(self) -> list[GameRecord]
@@ -157,7 +154,7 @@ class PuzzleManager:
 ### Execution Flow
 
 1. Load completed IDs from `.checkpoint`.
-2. For each `(puzzle, condition)` pair, call `dispatch_turn_with_backoff`.
+2. For each `(puzzle, condition)` pair, call `dispatch_turn`.
 3. Record metrics via `MetricsCollector`.
 4. Append JSONL record and checkpoint line.
 5. Write `exp1_summary.csv` at end.

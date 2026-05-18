@@ -19,13 +19,14 @@ For implementation-level node behavior and state mutation details, see `docs/arc
 
 ## Generation Strategies
 
-All conditions B–E support 3 swappable generation strategies (set via `generation_strategy` in state):
+All conditions B–E support 4 swappable generation strategies (set via `generation_strategy` in state):
 
 | Strategy | Flow | Extra LLM Calls |
 |----------|------|-----------------|
 | `generator_only` | LLM → UCI move | 0 |
 | `planner_actor` | Strategist LLM → NL plan → Tactician LLM → UCI move | +1 per attempt |
-| `router_specialists` | Router LLM → phase → Phase-specialist LLM → UCI move | +1 per attempt |
+| `observer_strategist_tactician` | Observer LLM → board description → Strategist LLM → plan → Tactician LLM → UCI move | +2 per attempt |
+| `observer_executor` | Observer LLM → board description → Executor LLM → UCI move | +1 per attempt |
 
 The validation pipeline is independent of the generation strategy.
 

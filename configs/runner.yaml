@@ -6,6 +6,12 @@ rate_limits:
   rpm: 15           # Requests per minute (sliding window)
   rpd: 1500         # Requests per day (local calendar day)
   tpm: null         # Tokens per minute — null = unlimited (track only)
+  request_timeout: 1200.0  # Seconds before considering a request failed
+
+  # Retry / backoff for transient server errors (500, 503)
+  max_retries: 10         # Retry attempts before giving up on a single request
+  backoff_base: 2.0       # Exponential backoff base (seconds)
+  backoff_max: 120.0      # Maximum backoff cap per retry (seconds)
 
 # Concurrency
 concurrency:

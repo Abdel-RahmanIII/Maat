@@ -1,4 +1,6 @@
-from unittest.mock import MagicMock, patch
+"""Tests for the FastAPI runner application."""
+
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,16 +15,9 @@ def mock_orchestrator():
 
 
 @pytest.fixture
-def mock_limiter():
-    mock_lim = MagicMock()
-    return mock_lim
-
-
-@pytest.fixture
-def client(mock_orchestrator, mock_limiter, monkeypatch):
+def client(mock_orchestrator, monkeypatch):
     monkeypatch.setattr(app_mod, "Orchestrator", lambda *args, **kwargs: mock_orchestrator)
-    monkeypatch.setattr(app_mod, "get_rate_limiter", lambda *args, **kwargs: mock_limiter)
-    
+
     app = app_mod.create_app()
     return TestClient(app)
 
@@ -35,34 +30,43 @@ def test_dashboard_html(client):
 
 def test_get_status(client, mock_orchestrator):
     mock_orchestrator.get_full_status.return_value = {"status": "running"}
-    
+
     response = client.get("/api/status")
     assert response.status_code == 200
     assert response.json() == {"status": "running"}
 
 
-def test_start_experiments(client, mock_orchestrator):
+def test_start_experiment(client, mock_orchestrator):
     response = client.post("/api/start", json={
-        "experiments": [{"id": 1, "conditions": ["A"]}],
-        "parallel_experiments": False,
-        "generation_strategy": "generator_only"
+        "experiment": 1,
+        "condition": "A",
+        "generation_strategy": "generator_only",
+        "n_runners": 5,
     })
-    
+
     assert response.status_code == 200
     assert response.json() == {"status": "started"}
-    mock_orchestrator.start.assert_called_once()
-    
+    mock_orchestrator.start.assert_called_once_with(
+        experiment=1,
+        condition="A",
+        generation_strategy="generator_only",
+        n_runners=5,
+    )
 
-def test_start_experiments_empty(client, mock_orchestrator):
-    response = client.post("/api/start", json={"experiments": []})
+
+def test_start_missing_params(client, mock_orchestrator):
+    response = client.post("/api/start", json={})
     assert response.status_code == 400
-    assert "No experiments specified" in response.json()["error"]
-    
+    assert "experiment and condition are required" in response.json()["error"]
 
-def test_start_experiments_conflict(client, mock_orchestrator):
+
+def test_start_conflict(client, mock_orchestrator):
     mock_orchestrator.start.side_effect = RuntimeError("Already running")
-    
-    response = client.post("/api/start", json={"experiments": [{"id": 1, "conditions": ["A"]}]})
+
+    response = client.post("/api/start", json={
+        "experiment": 1,
+        "condition": "A",
+    })
     assert response.status_code == 409
     assert response.json() == {"error": "Already running"}
 
@@ -70,29 +74,43 @@ def test_start_experiments_conflict(client, mock_orchestrator):
 def test_pause_resume_stop(client, mock_orchestrator):
     assert client.post("/api/pause").json() == {"status": "paused"}
     mock_orchestrator.pause.assert_called_once()
-    
+
     assert client.post("/api/resume").json() == {"status": "resumed"}
     mock_orchestrator.resume.assert_called_once()
-    
+
     assert client.post("/api/stop").json() == {"status": "stopping"}
     mock_orchestrator.stop.assert_called_once()
 
 
-def test_rate_limits(client, mock_limiter):
-    mock_limiter.get_status.return_value = {"rpm_limit": 15}
-    
+def test_rate_limits_no_manager(client, monkeypatch):
+    monkeypatch.setattr(
+        "src.runner.requests.manager.get_global_manager", lambda: None,
+    )
     response = client.get("/api/rate-limits")
     assert response.status_code == 200
-    assert response.json() == {"rpm_limit": 15}
+    assert response.json() == {"status": "Stopped"}
+
+
+def test_rate_limits_with_manager(client, monkeypatch):
+    mock_rm = MagicMock()
+    mock_rm.get_status.return_value = {"paused": False, "queue_size": 0}
+    monkeypatch.setattr(
+        "src.runner.requests.manager.get_global_manager", lambda: mock_rm,
+    )
+    response = client.get("/api/rate-limits")
+    assert response.status_code == 200
+    assert response.json()["paused"] is False
 
 
 def test_list_experiments(client, monkeypatch):
     from pathlib import Path
     monkeypatch.setattr(app_mod, "project_root", lambda: Path("/fake/root"))
-    
-    def fake_exists(self): return True
+
+    def fake_exists(self):
+        return True
+
     monkeypatch.setattr(Path, "exists", fake_exists)
-    
+
     response = client.get("/api/experiments")
     assert response.status_code == 200
     data = response.json()
@@ -100,20 +118,14 @@ def test_list_experiments(client, monkeypatch):
     assert data[0]["id"] == 1
 
 
-def test_get_update_config(client, mock_limiter):
+def test_get_update_config(client):
     response = client.get("/api/config")
     assert response.status_code == 200
-    
+
     response = client.post("/api/config", json={
-        "rate_limits": {"rpm": 100, "rpd": 2000}
+        "rate_limits": {"rpm": 100, "rpd": 2000},
     })
-    
     assert response.status_code == 200
-    assert mock_limiter.configure.call_count == 2
-    # Second call is the update
-    args, kwargs = mock_limiter.configure.call_args_list[1]
-    assert kwargs["rpm"] == 100
-    assert kwargs["rpd"] == 2000
 
 
 def test_websocket(client, mock_orchestrator):
@@ -123,7 +135,7 @@ def test_websocket(client, mock_orchestrator):
         data = websocket.receive_json()
         assert data["type"] == "initial_status"
         assert data["status"] == "initial"
-        
+
         # Test ping-pong
         websocket.send_json({"type": "ping"})
         data = websocket.receive_json()

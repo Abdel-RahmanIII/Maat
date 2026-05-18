@@ -1,9 +1,12 @@
+"""Tests for the rewritten single-experiment Orchestrator."""
+
 from __future__ import annotations
 
+import json
 import threading
 import time
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -14,14 +17,18 @@ from src.runner.core.orchestrator import Orchestrator
 
 @pytest.fixture
 def mock_deps(monkeypatch, tmp_path):
-    # Mock configs and paths
+    """Mock external dependencies so the orchestrator runs in-process."""
+
+    # Mock experiment config path
     def fake_experiment_config_path(exp_id):
         p = tmp_path / f"experiment_{exp_id}.yaml"
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text("dummy")
         return p
+
     monkeypatch.setattr(orch_mod, "experiment_config_path", fake_experiment_config_path)
-    
+
+    # Mock config loader
     def fake_load_experiment_config(path):
         return {
             "output_dir": tmp_path / "out",
@@ -37,192 +44,221 @@ def mock_deps(monkeypatch, tmp_path):
             "stockfish_elo": 1000,
             "stockfish_path": None,
         }
+
     monkeypatch.setattr(orch_mod, "load_experiment_config", fake_load_experiment_config)
-    
-    # Mock inputs
-    monkeypatch.setattr(orch_mod, "load_puzzle_inputs", lambda p: [{"puzzle_id": "p1", "fen": "fen1"}, {"puzzle_id": "p2", "fen": "fen2"}])
-    monkeypatch.setattr(orch_mod, "load_starting_positions", lambda p: ["fen1", "fen2"])
-    
-    # Mock checkpoints
-    monkeypatch.setattr(orch_mod, "load_checkpoint", lambda p: [])
-    monkeypatch.setattr(orch_mod, "list_incomplete_games", lambda p: [])
-    
-    # Mock rate limiter
-    mock_rl = MagicMock()
-    mock_rl.get_status.return_value = {"rpm_limit": 10}
-    monkeypatch.setattr(orch_mod, "get_rate_limiter", lambda: mock_rl)
+
+    # Mock puzzle/position loading
+    monkeypatch.setattr(
+        orch_mod, "load_puzzle_inputs",
+        lambda p: [{"puzzle_id": "p1", "fen": "fen1"}, {"puzzle_id": "p2", "fen": "fen2"}],
+    )
+    monkeypatch.setattr(
+        orch_mod, "load_starting_positions",
+        lambda p: ["fen1", "fen2"],
+    )
+
+    # Mock RequestsManager so no real API calls are made
+    mock_rm = MagicMock()
+    mock_rm.get_status.return_value = {"paused": False, "queue_size": 0}
+
+    def fake_rm_constructor(*args, **kwargs):
+        return mock_rm
+
+    monkeypatch.setattr(orch_mod, "RequestsManager", fake_rm_constructor)
+    monkeypatch.setattr(orch_mod, "set_global_manager", lambda m: None)
+
+    return mock_rm
 
 
 def test_orchestrator_initialization():
     orch = Orchestrator()
     assert orch.status == "idle"
-    assert orch.get_full_status()["status"] == "idle"
+    status = orch.get_full_status()
+    assert status["status"] == "idle"
+    assert status["experiment"] == 1
+    assert status["condition"] == "a"
 
 
 def test_orchestrator_start_already_running():
     orch = Orchestrator()
     orch._status = "running"
     with pytest.raises(RuntimeError, match="Already running"):
-        orch.start([{"id": 1, "conditions": ["A"]}])
+        orch.start(experiment=1, condition="A")
 
 
 def test_orchestrator_pause_resume_stop():
     orch = Orchestrator()
-    
+
     # Should not do anything if not running
     orch.pause()
     assert orch.status == "idle"
-    
+
     orch.resume()
     assert orch.status == "idle"
-    
+
     orch.stop()
     assert orch.status == "idle"
-    
+
     # Set to running
     orch._status = "running"
-    
+
     orch.pause()
     assert orch.status == "paused"
     assert not orch._pause_event.is_set()
-    
+
     orch.resume()
     assert orch.status == "running"
     assert orch._pause_event.is_set()
-    
+
     orch.stop()
     assert orch.status == "stopping"
     assert orch._stop_event.is_set()
     assert orch._pause_event.is_set()
 
 
-def test_orchestrator_get_full_status(mock_deps):
+def test_orchestrator_get_full_status():
     orch = Orchestrator()
-    orch.add_api_log_entry({"call": 1})
-    orch._recent_errors.append({"error": "test"})
-    
     status = orch.get_full_status()
     assert status["status"] == "idle"
     assert "rate_limits" in status
-    assert len(status["api_log"]) == 1
-    assert len(status["recent_errors"]) == 1
+    assert "progress" in status
 
 
-def test_orchestrator_run_puzzle_experiment_sequential(mock_deps, monkeypatch):
+def test_orchestrator_run_puzzles(mock_deps, monkeypatch, tmp_path):
+    """Test that puzzles run to completion through _evaluate_puzzle."""
+
     events = []
     orch = Orchestrator(on_event=events.append)
-    
-    def fake_run_puzzle(*args, **kwargs):
-        class FakeRecord:
-            final_status = "completed"
+
+    # Mock _evaluate_puzzle on PuzzleManager
+    class FakeRecord:
+        final_status = "completed"
+
+        def model_dump_json(self):
+            return json.dumps({"game_id": "test", "final_status": "completed"})
+
+    def fake_evaluate_puzzle(self, puzzle, condition, game_id=None):
         return FakeRecord()
-        
-    monkeypatch.setattr(orch_mod, "run_puzzle_worker", fake_run_puzzle)
-    
-    orch.start([{"id": 1, "conditions": ["A"]}], parallel_experiments=False)
-    orch._run_thread.join()
-    
+
+    monkeypatch.setattr(
+        "src.engine.puzzle_manager.PuzzleManager._evaluate_puzzle",
+        fake_evaluate_puzzle,
+    )
+
+    # Mock persistence (don't write to disk in tests)
+    monkeypatch.setattr(orch_mod, "append_game_record", lambda r, p: None)
+    monkeypatch.setattr(orch_mod, "append_checkpoint", lambda g, p: None)
+    monkeypatch.setattr(orch_mod, "load_completed_game_ids", lambda *a, **kw: set())
+
+    # Mock runner config
+    monkeypatch.setattr(Orchestrator, "_load_runner_config", staticmethod(lambda: {}))
+
+    orch.start(experiment=1, condition="A", n_runners=2)
+    orch._run_thread.join(timeout=10)
+
     assert orch.status == "completed"
-    
+
     event_types = [e["type"] for e in events]
     assert "run_started" in event_types
     assert "condition_started" in event_types
-    assert "experiment_finished" in event_types
     assert "run_finished" in event_types
-    
-    full_status = orch.get_full_status()
-    cond_a = full_status["experiments"][1]["conditions"]["A"]
-    assert cond_a["total"] == 2
-    assert cond_a["completed"] == 2
 
 
-def test_orchestrator_run_game_experiment_parallel(mock_deps, monkeypatch):
-    orch = Orchestrator()
-    
-    def fake_run_game(*args, **kwargs):
-        class FakeRecord:
-            final_status = "completed"
+def test_orchestrator_skips_completed_puzzles(mock_deps, monkeypatch, tmp_path):
+    """Test that already-completed puzzles are skipped."""
+
+    events = []
+    orch = Orchestrator(on_event=events.append)
+
+    # Pretend p1 is already completed
+    monkeypatch.setattr(
+        orch_mod, "load_completed_game_ids",
+        lambda *a, **kw: {"exp1_p1_A"},
+    )
+
+    call_count = 0
+
+    class FakeRecord:
+        final_status = "completed"
+
+        def model_dump_json(self):
+            return "{}"
+
+    def fake_evaluate_puzzle(self, puzzle, condition, game_id=None):
+        nonlocal call_count
+        call_count += 1
         return FakeRecord()
-        
-    monkeypatch.setattr(orch_mod, "run_game_worker", fake_run_game)
-    
-    orch.start([{"id": 2, "conditions": ["A"]}, {"id": 3, "conditions": ["B"]}], parallel_experiments=True)
-    orch._run_thread.join()
-    
-    assert orch.status == "completed"
-    
-    full_status = orch.get_full_status()
-    assert full_status["experiments"][2]["conditions"]["A"]["completed"] == 2
-    assert full_status["experiments"][3]["conditions"]["B"]["completed"] == 2
+
+    monkeypatch.setattr(
+        "src.engine.puzzle_manager.PuzzleManager._evaluate_puzzle",
+        fake_evaluate_puzzle,
+    )
+    monkeypatch.setattr(orch_mod, "append_game_record", lambda r, p: None)
+    monkeypatch.setattr(orch_mod, "append_checkpoint", lambda g, p: None)
+    monkeypatch.setattr(Orchestrator, "_load_runner_config", staticmethod(lambda: {}))
+
+    orch.start(experiment=1, condition="A", n_runners=1)
+    orch._run_thread.join(timeout=10)
+
+    # Only p2 should have been evaluated
+    assert call_count == 1
 
 
-def test_orchestrator_missing_config(mock_deps, monkeypatch, tmp_path):
+def test_orchestrator_stop_interrupts_runners(mock_deps, monkeypatch, tmp_path):
+    """Test that stop event causes runners to exit."""
+
     orch = Orchestrator()
-    # Mock to return a non-existent path
-    monkeypatch.setattr(orch_mod, "experiment_config_path", lambda exp_id: tmp_path / "does_not_exist.yaml")
-    
-    orch.start([{"id": 1, "conditions": ["A"]}], parallel_experiments=False)
-    orch._run_thread.join()
-    
-    # Experiment doesn't get created in status
-    assert 1 not in orch.get_full_status()["experiments"]
 
+    class FakeRecord:
+        final_status = "completed"
 
-def test_orchestrator_worker_exception(mock_deps, monkeypatch):
-    orch = Orchestrator()
-    
-    def fake_run_puzzle(*args, **kwargs):
-        return None # Worker returns None on error
-        
-    monkeypatch.setattr(orch_mod, "run_puzzle_worker", fake_run_puzzle)
-    
-    orch.start([{"id": 1, "conditions": ["A"]}], parallel_experiments=False)
-    orch._run_thread.join()
-    
-    # Exception is caught, experiment finishes
-    assert orch.status == "completed"
-    
-    full_status = orch.get_full_status()
-    cond_a = full_status["experiments"][1]["conditions"]["A"]
-    assert cond_a["failed"] == 2
+        def model_dump_json(self):
+            return "{}"
 
-
-def test_orchestrator_handle_worker_event():
-    orch = Orchestrator()
-    orch._handle_worker_event({"type": "worker_error", "error": "test"})
-    assert len(orch._recent_errors) == 1
-    
-    for _ in range(150):
-        orch._handle_worker_event({"type": "worker_error", "error": "test"})
-    assert len(orch._recent_errors) == 100 # capped at 100
-
-
-def test_orchestrator_add_api_log_entry():
-    orch = Orchestrator()
-    for i in range(600):
-        orch.add_api_log_entry({"call": i})
-    
-    logs = orch._get_recent_api_log(10)
-    assert len(logs) == 10
-    assert logs[-1]["call"] == 599
-    
-    # Total capped at 500
-    with orch._api_log_lock:
-        assert len(orch._api_log) == 500
-
-
-def test_orchestrator_stop_interrupts_loop(mock_deps, monkeypatch):
-    orch = Orchestrator()
-    
-    def fake_run_puzzle(*args, **kwargs):
+    def fake_evaluate_puzzle(self, puzzle, condition, game_id=None):
+        # Stop during first puzzle
         orch.stop()
-        class FakeRecord:
-            final_status = "completed"
         return FakeRecord()
-        
-    monkeypatch.setattr(orch_mod, "run_puzzle_worker", fake_run_puzzle)
-    
-    orch.start([{"id": 1, "conditions": ["A", "B"]}], parallel_experiments=False)
-    orch._run_thread.join()
-    
+
+    monkeypatch.setattr(
+        "src.engine.puzzle_manager.PuzzleManager._evaluate_puzzle",
+        fake_evaluate_puzzle,
+    )
+    monkeypatch.setattr(orch_mod, "append_game_record", lambda r, p: None)
+    monkeypatch.setattr(orch_mod, "append_checkpoint", lambda g, p: None)
+    monkeypatch.setattr(orch_mod, "load_completed_game_ids", lambda *a, **kw: set())
+    monkeypatch.setattr(Orchestrator, "_load_runner_config", staticmethod(lambda: {}))
+
+    orch.start(experiment=1, condition="A", n_runners=1)
+    orch._run_thread.join(timeout=10)
+
     assert orch.status == "stopped"
+
+
+def test_orchestrator_missing_config(monkeypatch, tmp_path):
+    """Test that a missing YAML config stops gracefully."""
+
+    orch = Orchestrator()
+
+    monkeypatch.setattr(
+        orch_mod, "experiment_config_path",
+        lambda exp_id: tmp_path / "does_not_exist.yaml",
+    )
+    monkeypatch.setattr(Orchestrator, "_load_runner_config", staticmethod(lambda: {}))
+
+    orch.start(experiment=1, condition="A")
+    orch._run_thread.join(timeout=5)
+
+    assert orch.status == "stopped"
+
+
+def test_orchestrator_rpd_triggers_pause(mock_deps, monkeypatch, tmp_path):
+    """Test that on_rpd_limit callback pauses the orchestrator."""
+
+    orch = Orchestrator()
+    orch._status = "running"
+
+    orch._on_rpd_limit()
+
+    assert orch.status == "paused"
+    assert not orch._pause_event.is_set()

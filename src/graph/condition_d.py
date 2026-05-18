@@ -14,9 +14,11 @@ from langgraph.graph.state import CompiledStateGraph
 
 from src.config import ModelConfig
 from src.context import ConversationContext
-from src.graph.base_graph import snapshot_turn_result
+from src.graph.base_graph import persist_successful_turn_context, snapshot_turn_result
 from src.graph.generation import build_generation_subgraph
 from src.state import InputMode, TurnState, create_initial_turn_state
+from src.validators.symbolic import validate_move
+from src.error_taxonomy import ErrorType
 
 
 # ── Graph builder ─────────────────────────────────────────────────────────
@@ -32,29 +34,69 @@ def build_graph(
     gen_subgraph = build_generation_subgraph(generation_strategy, model_config, context)
 
     def _route_after_generate(state: TurnState) -> str:
+        return "ground_truth"
+
+    def _ground_truth_node(state: TurnState) -> dict[str, Any]:
+        parse_error_types = (ErrorType.PARSE_ERROR.value, ErrorType.NO_OUTPUT.value)
+        error_types = list(state.get("error_types", []))
+        last_error = error_types[-1] if error_types else None
+
+        if not state["is_valid"] and last_error in parse_error_types:
+            feedback = list(state["feedback_history"])
+            feedback.append(f"Invalid UCI: {state.get('proposed_move', '')}")
+
+            updates: dict[str, Any] = {
+                "is_valid": False,
+                "ground_truth_verdict": False,
+                "error_reason": state.get("error_reason", ""),
+                "feedback_history": feedback,
+            }
+            if state["total_attempts"] == 1:
+                updates["first_try_valid"] = False
+            if state["total_attempts"] <= state["max_retries"]:
+                updates["retry_count"] = state["retry_count"] + 1
+            return updates
+
+        result = validate_move(state["board_fen"], state["proposed_move"])
+
+        error_types = list(state["error_types"])
+        if not result["valid"] and result["error_type"]:
+            error_types.append(result["error_type"])
+
+        updates: dict[str, Any] = {
+            "is_valid": result["valid"],
+            "ground_truth_verdict": result["valid"],
+            "error_reason": result["reason"],
+            "error_types": error_types,
+        }
+        if state["total_attempts"] == 1:
+            updates["first_try_valid"] = result["valid"]
+
+        if not result["valid"]:
+            error_reason = result["reason"].strip()
+            feedback = list(state["feedback_history"])
+            if error_reason:
+                feedback.append(
+                    f"Illegal move {state['proposed_move']}: {error_reason}"
+                )
+            else:
+                feedback.append(
+                    f"Illegal move {state['proposed_move']}."
+                )
+            if state["total_attempts"] <= state["max_retries"]:
+                updates["retry_count"] = state["retry_count"] + 1
+            updates["feedback_history"] = feedback
+
+        return updates
+
+    def _route_after_ground_truth(state: TurnState) -> str:
         if state["is_valid"]:
             return "accept"
-        if state["retry_count"] < state["max_retries"]:
-            return "terse_feedback"
+        if state["total_attempts"] <= state["max_retries"]:
+            return "generate"
         return "forfeit"
 
-    def _terse_feedback_node(state: TurnState) -> dict[str, Any]:
-        """Build a terse machine-generated feedback message and increment retries."""
 
-        # Construct feedback from the error info captured by the subgraph
-        error_types = state.get("error_types", [])
-        last_error = error_types[-1] if error_types else "UNKNOWN"
-
-        feedback = list(state["feedback_history"])
-        feedback.append(
-            f"Illegal move {state['proposed_move']}: {last_error}"
-        )
-
-        return {
-            "retry_count": state["retry_count"] + 1,
-            "feedback_history": feedback,
-            "is_valid": False,
-        }
 
     def _accept_node(state: TurnState) -> dict[str, Any]:
         return {
@@ -71,7 +113,7 @@ def build_graph(
     graph = StateGraph(TurnState)
 
     graph.add_node("generate", gen_subgraph)
-    graph.add_node("terse_feedback", _terse_feedback_node)
+    graph.add_node("ground_truth", _ground_truth_node)
     graph.add_node("accept", _accept_node)
     graph.add_node("forfeit", _forfeit_node)
 
@@ -80,9 +122,13 @@ def build_graph(
     graph.add_conditional_edges(
         "generate",
         _route_after_generate,
-        {"accept": "accept", "terse_feedback": "terse_feedback", "forfeit": "forfeit"},
+        {"ground_truth": "ground_truth"},
     )
-    graph.add_edge("terse_feedback", "generate")
+    graph.add_conditional_edges(
+        "ground_truth",
+        _route_after_ground_truth,
+        {"accept": "accept", "generate": "generate", "forfeit": "forfeit"},
+    )
     graph.add_edge("accept", END)
     graph.add_edge("forfeit", END)
 
@@ -114,4 +160,9 @@ def run_condition_d(
     state["generation_strategy"] = generation_strategy
 
     compiled = build_graph(model_config, generation_strategy, context)
-    return cast(TurnState, compiled.invoke(state))
+    state = cast(TurnState, compiled.invoke(state))
+    
+    if state.get("is_valid"):
+        persist_successful_turn_context(state, context)
+    
+    return state

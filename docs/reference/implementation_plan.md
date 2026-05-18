@@ -23,7 +23,7 @@ The study manipulates two independent variables:
 1. **Generation Strategy** — how the move is produced:
    - **Generator (G)**: A single LLM generates the UCI move directly.
    - **Planner-Actor (PA)**: A Strategist LLM produces a natural-language plan; a Tactician LLM converts it to a UCI move.
-   - **Router-Specialist (RS)**: A Router classifies the game phase; a phase-specific Specialist LLM generates the move.
+   - **Observer-Executor (OE)**: An Observer LLM produces a comprehensive board description; an Executor LLM selects a move based entirely on that description.
 2. **Enforcement Strategy** — how the move is validated / corrected:
    - **None**: No validation; forfeit on first illegal move.
    - **LLM Critic (C)**: A second LLM pass evaluates legality.
@@ -38,18 +38,18 @@ graph TB
     end
     subgraph "MAS Generation Baselines (no enforcement)"
         B1["B1: Planner-Actor<br/>(no enforcement)"]
-        B2["B2: Router-Specialist<br/>(no enforcement)"]
+        B2["B2: Observer-Executor<br/>(no enforcement)"]
     end
     subgraph "Enforcement × Generation Matrix (9 arms)"
         CG["C-G: Critic + Generator"]
         CPA["C-PA: Critic + Planner-Actor"]
-        CRS["C-RS: Critic + Router-Specialist"]
+        COE["C-OE: Critic + Observer-Executor"]
         DG["D-G: Symbolic + Generator"]
         DPA["D-PA: Symbolic + Planner-Actor"]
-        DRS["D-RS: Symbolic + Router-Specialist"]
+        DOE["D-OE: Symbolic + Observer-Executor"]
         EG["E-G: Symbolic+Explainer + Generator"]
         EPA["E-PA: Symbolic+Explainer + Planner-Actor"]
-        ERS["E-RS: Symbolic+Explainer + Router-Specialist"]
+        EOE["E-OE: Symbolic+Explainer + Observer-Executor"]
     end
     subgraph "Autonomous Paradigm"
         F["F: ReAct + Tool Calling"]
@@ -58,27 +58,27 @@ graph TB
     A -.->|"adds MAS generation"| B2
     A -.->|"adds enforcement"| CG
     B1 -.->|"adds enforcement"| CPA
-    B2 -.->|"adds enforcement"| CRS
+    B2 -.->|"adds enforcement"| COE
 
 | Arm | Generation Strategy | Enforcement Strategy | LLM Calls (min–max) |
 |-----|--------------------|--------------------|---------------------|
 | **A** | Generator | None | 1 |
 | **B1** | Planner-Actor | None | 2 |
-| **B2** | Router-Specialist | None | 2 |
+| **B2** | Observer-Executor | None | 2 |
 | **C-G** | Generator | LLM Critic | 2 – 2+2N |
 | **C-PA** | Planner-Actor | LLM Critic | 3 – 3+2N |
-| **C-RS** | Router-Specialist | LLM Critic | 3 – 3+2N |
+| **C-OE** | Observer-Executor | LLM Critic | 3 – 3+2N |
 | **D-G** | Generator | Symbolic Validator | 1 – 1+N |
 | **D-PA** | Planner-Actor | Symbolic Validator | 2 – 2+N |
-| **D-RS** | Router-Specialist | Symbolic Validator | 2 – 2+N |
+| **D-OE** | Observer-Executor | Symbolic Validator | 2 – 2+N |
 | **E-G** | Generator | Symbolic + Explainer | 1 – 1+2N |
 | **E-PA** | Planner-Actor | Symbolic + Explainer | 2 – 2+2N |
-| **E-RS** | Router-Specialist | Symbolic + Explainer | 2 – 2+2N |
+| **E-OE** | Observer-Executor | Symbolic + Explainer | 2 – 2+2N |
 | **F** | ReAct (integrated) | Tool-based (autonomous) | 1 – M |
 > [!NOTE]
 > **Condition A** is the true non-MAS baseline: a single Generator agent with no enforcement and no LangGraph framework. It establishes the raw LLM capability floor.
 >
-> **Conditions B1 and B2** are MAS generation baselines: they test whether splitting the generation stage (Planner-Actor or Router-Specialist) improves first-try legality *without* any enforcement. They forfeit on first illegal move, just like A.
+> **Conditions B1 and B2** are MAS generation baselines: they test whether splitting the generation stage (Planner-Actor or Observer-Executor) improves first-try legality *without* any enforcement. They forfeit on first illegal move, just like A.
 ### 2.3 Condition Details
 #### Condition A — Single Generator Baseline
 - **Architecture**: Direct API call, no LangGraph, no MAS.
@@ -90,26 +90,26 @@ graph TB
 - **Generation**: Strategist LLM → natural-language plan → Tactician LLM → UCI move.
 - **Enforcement**: None. If illegal, **forfeit**.
 - **Purpose**: Tests whether separating strategic planning from tactical move selection reduces first-try violations, independent of any enforcement mechanism.
-#### Condition B2 — Router-Specialist Baseline
-- **Architecture**: Router + phase-specialist pipeline in LangGraph, no enforcement.
-- **Generation**: Router classifies game phase → dispatches to Opening/Middlegame/Endgame Specialist → UCI move.
+#### Condition B2 — Observer-Executor Baseline
+- **Architecture**: Observer + Executor pipeline in LangGraph, no enforcement.
+- **Generation**: Observer LLM produces a comprehensive natural-language board description (piece positions, material balance, pawn structure, king safety, key square control, tactical features, piece activity). Executor LLM receives that description as the authoritative board representation and selects a UCI move based entirely on it, explicitly discouraged from re-interpreting the raw board independently.
 - **Enforcement**: None. If illegal, **forfeit**.
-- **Purpose**: Tests whether phase-specific expertise reduces violations, independent of enforcement.
-#### Conditions C (C-G, C-PA, C-RS) — LLM Critic Enforcement
+- **Purpose**: Tests whether separating board observation from move execution — forcing the move-generator to rely on a structured description rather than raw FEN — reduces violations, independent of enforcement.
+#### Conditions C (C-G, C-PA, C-OE) — LLM Critic Enforcement
 - **Architecture**: Generation pipeline + Critic agent.
-- **Generation**: Varies by arm (Generator, Planner-Actor, or Router-Specialist).
+- **Generation**: Varies by arm (Generator, Planner-Actor, or Observer-Executor).
 - **Enforcement**: Critic LLM (same model, different system prompt) evaluates legality → if valid, accept; if invalid, sends detailed natural-language feedback → Generator retries → up to **N** times → **forfeit**.
 - **Critic Prompt Design**: The Critic receives the FEN and proposed move. Returns a structured verdict: {valid: bool, reasoning: str, suggestion: str}.
 - **Ground-Truth Check**: After Critic approval, python-chess performs a ground-truth check. If the Critic approved an illegal move (false positive), the move forfeits with no retry.
 - **Purpose**: Tests whether a second LLM pass (without ground-truth access) can catch errors.
-#### Conditions D (D-G, D-PA, D-RS) — Symbolic Validator Enforcement
+#### Conditions D (D-G, D-PA, D-OE) — Symbolic Validator Enforcement
 - **Architecture**: Generation pipeline + python-chess validator node.
-- **Generation**: Varies by arm (Generator, Planner-Actor, or Router-Specialist).
+- **Generation**: Varies by arm (Generator, Planner-Actor, or Observer-Executor).
 - **Enforcement**: python-chess checks legality → if valid, accept; if invalid, return a **terse machine-generated error** → Generator retries → up to **N** times → **forfeit**.
 - **Purpose**: Tests ground-truth rule enforcement with minimal feedback.
-#### Conditions E (E-G, E-PA, E-RS) — Symbolic + Explainer Enforcement
+#### Conditions E (E-G, E-PA, E-OE) — Symbolic + Explainer Enforcement
 - **Architecture**: Generation pipeline + python-chess validator + Explainer agent.
-- **Generation**: Varies by arm (Generator, Planner-Actor, or Router-Specialist).
+- **Generation**: Varies by arm (Generator, Planner-Actor, or Observer-Executor).
 - **Enforcement**: python-chess checks → if invalid, Explainer LLM translates error into **rich pedagogical feedback** → Generator retries → up to **N** times → **forfeit**.
 - **Purpose**: Tests whether combining ground-truth detection with LLM-generated explanation outperforms either alone.
 #### Condition F — ReAct + Tool Calling
@@ -155,10 +155,10 @@ graph TB
         CD{Arm<br/>Selector}
         GA["A: Generator<br/>(direct call)"]
         GB1["B1: Planner-Actor"]
-        GB2["B2: Router-Specialist"]
-        GCx["C-G / C-PA / C-RS"]
-        GDx["D-G / D-PA / D-RS"]
-        GEx["E-G / E-PA / E-RS"]
+        GB2["B2: Observer-Executor"]
+        GCx["C-G / C-PA / C-OE"]
+        GDx["D-G / D-PA / D-OE"]
+        GEx["E-G / E-PA / E-OE"]
         GF["F: ReAct"]
     end
     subgraph "Shared Infrastructure"
@@ -210,8 +210,8 @@ class TurnState(TypedDict):
     ground_truth_verdict: bool | None      # python-chess ground truth
     # ── Game-Level (accumulated) ──
     game_id: str
-    condition: str                          # Arm label (e.g. "A", "B1", "C-PA", "D-RS", "F")
-    generation_strategy: str               # "generator", "planner_actor", or "router_specialist"
+    condition: str                          # Arm label (e.g. "A", "B1", "C-PA", "D-OE", "F")
+    generation_strategy: str               # "generator_only", "planner_actor", or "observer_executor"
     enforcement_strategy: str              # "none", "critic", "symbolic", "symbolic_explainer", "react"
     turn_results: list[dict]               # Accumulated per-turn metric records
     game_status: Literal[
@@ -223,18 +223,18 @@ class TurnState(TypedDict):
 The generation stage in the diagrams below is shown as GEN for simplicity. In practice, GEN is one of:
 - **Generator**: single LLM call (arms A, C-G, D-G, E-G)
 - **Planner-Actor**: Strategist → Tactician (arms B1, C-PA, D-PA, E-PA)
-- **Router-Specialist**: Router → phase Specialist (arms B2, C-RS, D-RS, E-RS)
+- **Observer-Executor**: Observer → Executor (arms B2, C-OE, D-OE, E-OE)
 #### Arms A, B1, B2 — No Enforcement
 mermaid
 graph LR
-    S((START)) --> GEN["Generation Stage<br/>(G / PA / RS)"]
+    S((START)) --> GEN["Generation Stage<br/>(G / PA / OE)"]
     GEN --> VAL{Valid?}
     VAL -->|Yes| ACC[Accept<br/>Move]
     VAL -->|No| FORFEIT[Forfeit]
     ACC --> E((END))
     FORFEIT --> E
 
-#### Arms C-G, C-PA, C-RS — LLM Critic Loop
+#### Arms C-G, C-PA, C-OE — LLM Critic Loop
 mermaid
 graph LR
     S((START)) --> GEN[Generate<br/>Move]
@@ -249,7 +249,7 @@ graph LR
 
 > [!IMPORTANT]
 > For Condition C, the Critic is an LLM — it can be wrong. A **ground-truth check** after the Critic approves is essential. If the Critic says "valid" but python-chess disagrees, the move is still recorded as invalid (but the game does NOT get a retry — the Critic already passed it). This captures the Critic's false-positive rate as a secondary metric.
-#### Arms D-G, D-PA, D-RS — Symbolic Validator Loop
+#### Arms D-G, D-PA, D-OE — Symbolic Validator Loop
 mermaid
 graph LR
     S((START)) --> GEN[Generate<br/>Move]
@@ -260,7 +260,7 @@ graph LR
     ACC --> E((END))
     FORFEIT --> E
 
-#### Arms E-G, E-PA, E-RS — Symbolic + Explainer Loop
+#### Arms E-G, E-PA, E-OE — Symbolic + Explainer Loop
 mermaid
 graph LR
     S((START)) --> GEN[Generate<br/>Move]
@@ -313,21 +313,17 @@ graph LR
 - **Strategist**: Receives the board state. Outputs a natural-language strategic plan (e.g., *"Develop the knight to f3 to control the center and prepare kingside castling"*).
 - **Tactician**: Receives the plan + board state. Selects the best UCI move implementing the strategy.
 - Used in arms B1, C-PA, D-PA, E-PA.
-#### Router-Specialist (RS)
+#### Observer-Executor (OE)
 mermaid
 graph LR
-    S((START)) --> R[Router<br/>LLM]
-    R -->|Opening| OE[Opening<br/>Expert]
-    R -->|Middlegame| ME[Middlegame<br/>Tactician]
-    R -->|Endgame| EE[Endgame<br/>Specialist]
-    OE & ME & EE -->|"UCI Move"| VAL["Enforcement<br/>Pipeline<br/>(none / C / D / E)"]
+    S((START)) --> OBS[Observer<br/>LLM] -->|"Board Description"| EXE[Executor<br/>LLM] -->|"UCI Move"| VAL["Enforcement<br/>Pipeline<br/>(none / C / D / E)"]
     VAL --> E((END))
 
-- **Router**: Classifies game phase from FEN + move count. Can use heuristic rules (move count thresholds, piece count) or LLM judgment.
-- **Specialists**: Each has a phase-specific system prompt emphasizing relevant principles.
-- Used in arms B2, C-RS, D-RS, E-RS.
+- **Observer**: Receives the FEN, ASCII board, move history, and past feedback. Produces a comprehensive natural-language description of the board state — piece positions, control of key squares, pawn structure, material balance, king safety, and tactical features. Does **not** suggest moves, evaluate options, or express intent. Only describes what is true about the position.
+- **Executor**: Receives the Observer's natural-language summary alongside the game context. Treats the Observer's summary as the authoritative representation of the board and bases its decision entirely on that description. Explicitly discouraged from re-interpreting the raw board independently. Outputs a single UCI move.
+- Used in arms B2, C-OE, D-OE, E-OE.
 > [!WARNING]
-> MAS generation strategies (PA, RS) double LLM calls per turn before enforcement even begins. Budget API costs carefully. With Gemma 4 31B on AI Studio, check rate limits and quotas before committing to full-matrix runs.
+> MAS generation strategies (PA, OE) double LLM calls per turn before enforcement even begins. Budget API costs carefully. With Gemma 4 31B on AI Studio, check rate limits and quotas before committing to full-matrix runs.
 ---
 ## 4. Experiments
 ### 4.1 Experiment 1 — Isolated Position Evaluation
@@ -341,7 +337,7 @@ graph LR
 | **Difficulty** | Equally distributed across Lichess rating buckets within each phase |
 | **Board Input** | Full FEN + ASCII board |
 | **Task** | Play any legal move (not necessarily the puzzle solution) |
-| **Arms** | All 13 (A, B1, B2, C-G, C-PA, C-RS, D-G, D-PA, D-RS, E-G, E-PA, E-RS, F) |
+| **Arms** | All 13 (A, B1, B2, C-G, C-PA, C-OE, D-G, D-PA, D-OE, E-G, E-PA, E-OE, F) |
 | **Runs** | 1 pass per position per arm = 3,900 total evaluations |
 **Puzzle Sampling Strategy**:
 1. Download the [Lichess puzzle CSV](https://database.lichess.org/#puzzles)
@@ -371,7 +367,7 @@ graph LR
 > **Fallback (reduced set)**: If time or resource limits prevent the full matrix, run only:
 > - **A** (non-MAS baseline)
 > - **B1** (Planner-Actor baseline)
-> - **B2** (Router-Specialist baseline)
+> - **B2** (Observer-Executor baseline)
 > - **Best C/D/E arm** from Exp 1 (the single arm with the lowest FIR)
 > - **F** (ReAct)
 >
@@ -426,26 +422,26 @@ MFIR is computed for each chained pair to show the marginal value of each archit
 | Pair | What It Isolates |
 |------|------------------|
 | A → B1 | Adding Planner-Actor generation (no enforcement) |
-| A → B2 | Adding Router-Specialist generation (no enforcement) |
+| A → B2 | Adding Observer-Executor generation (no enforcement) |
 | A → C-G | Adding Critic enforcement (same generator) |
 | A → D-G | Adding Symbolic Validator enforcement (same generator) |
 | D-G → E-G | Adding Explainer on top of Symbolic Validator |
 | A → F | Adding autonomous tool access |
 | C-G → C-PA | Effect of Planner-Actor within Critic enforcement |
-| C-G → C-RS | Effect of Router-Specialist within Critic enforcement |
+| C-G → C-OE | Effect of Observer-Executor within Critic enforcement |
 | D-G → D-PA | Effect of Planner-Actor within Symbolic enforcement |
-| D-G → D-RS | Effect of Router-Specialist within Symbolic enforcement |
+| D-G → D-OE | Effect of Observer-Executor within Symbolic enforcement |
 Expected LCPT by arm (see Section 2.2 for full table):
 | Arm Group | Min LCPT | Max LCPT | Notes |
 |-----------|----------|----------|-------|
 | A | 1 | 1 | Single call, no retries |
 | B1, B2 | 2 | 2 | Generation pipeline, no retries |
 | C-G | 2 | 2 + 2N | Generator + Critic per attempt |
-| C-PA, C-RS | 3 | 3 + 2N | Gen pipeline + Critic per attempt |
+| C-PA, C-OE | 3 | 3 + 2N | Gen pipeline + Critic per attempt |
 | D-G | 1 | 1 + N | Generator only; validator is symbolic (free) |
-| D-PA, D-RS | 2 | 2 + N | Gen pipeline; validator is symbolic (free) |
+| D-PA, D-OE | 2 | 2 + N | Gen pipeline; validator is symbolic (free) |
 | E-G | 1 | 1 + 2N | Generator + Explainer per failed attempt |
-| E-PA, E-RS | 2 | 2 + 2N | Gen pipeline + Explainer per failed attempt |
+| E-PA, E-OE | 2 | 2 + 2N | Gen pipeline + Explainer per failed attempt |
 | F | 1 | M | 1 to M reasoning steps, each may call LLM |
 > [!IMPORTANT]
 > **CAFIR exclusion**: Arms A, B1, and B2 are strictly excluded from CAFIR ranking because they have no enforcement mechanism and cannot trade cost for quality. They are reported separately as fixed baselines.
@@ -488,18 +484,18 @@ A flat Bernoulli baseline (i.e. (total_turns − 1) × FTIR²) is explicitly rej
 ---
 ## 6. Research Question Analysis
 ### 6.1 RQ1: Can explicit role separation reduce rule violations?
-**Core question**: Does adding distinct agent roles (Critic, Validator, Explainer, ReAct tools) or MAS generation strategies (Planner-Actor, Router-Specialist) to the pipeline reduce the rate of illegal moves?
+**Core question**: Does adding distinct agent roles (Critic, Validator, Explainer, ReAct tools) or MAS generation strategies (Planner-Actor, Observer-Executor) to the pipeline reduce the rate of illegal moves?
 #### 6.1.1 Metrics
 | Metric | Role | Source | What It Reveals |
 |--------|------|--------|-----------------|
 | FIR | Primary | Exp 1 | Main comparison axis — ultimate failure rate after all retries across all 13 arms |
 | MFIR & ARR | Primary | Exp 1 | Marginal contribution of each added role (quantifies the value of upgrading A→B1/B2, A→C-G/D-G, D-G→E-G, A→F, and generation strategy effects within enforcement) |
 | Phase-Stratified FIR | Primary | Exp 1 | Whether architecture effectiveness depends on game phase (opening vs. middlegame vs. endgame) |
-| FTIR | Primary | Exp 1 | Directly relevant: MAS generation strategies (PA, RS) change the generation stage, making FTIR differ across arms even before enforcement fires |
+| FTIR | Primary | Exp 1 | Directly relevant: MAS generation strategies (PA, OE) change the generation stage, making FTIR differ across arms even before enforcement fires |
 | IMFR | Primary | Exp 2 | Game-level: fraction of games lost specifically to a rule violation |
 | FST | Primary | Exp 2 | Game-level: how long the agent survives before a fatal illegal move |
 > [!NOTE]
-> **FTIR is now a first-class RQ1 metric**: Unlike the previous 6-condition design where the same generator was shared across B–E, the 13-arm matrix uses three different generation strategies. Arms using Planner-Actor or Router-Specialist may produce different first-try legality rates than the plain Generator, making FTIR a meaningful differentiator across all arms.
+> **FTIR is now a first-class RQ1 metric**: Unlike the previous 6-condition design where the same generator was shared across B–E, the 13-arm matrix uses three different generation strategies. Arms using Planner-Actor or Observer-Executor may produce different first-try legality rates than the plain Generator, making FTIR a meaningful differentiator across all arms.
 #### 6.1.2 Statistical Tests
 | Test | Target Metric | Question Answered | Execution Details |
 |------|--------------|-------------------|-------------------|
@@ -612,7 +608,7 @@ Ground-truth classifications determined strictly by python-chess. The puzzle's t
 | Tool-Call Distribution (F) | | | ✅ F-specific | ✅ | ³ |
 | Tool-Stratified FIR (F) | | | ✅ F-specific | ✅ | ³ |
 | Avg. Reasoning Steps (F) | | | ✅ F-specific | ✅ | ³ |
-> ¹ FTIR is now a first-class RQ1 metric because MAS generation strategies (Planner-Actor, Router-Specialist) produce different first-try legality rates than the plain Generator. FTIR differences across arms A, B1, B2, and the generation-strategy variants of C/D/E are directly meaningful.
+> ¹ FTIR is now a first-class RQ1 metric because MAS generation strategies (Planner-Actor, Observer-Executor) produce different first-try legality rates than the plain Generator. FTIR differences across arms A, B1, B2, and the generation-strategy variants of C/D/E are directly meaningful.
 >
 > ² Only computable for arms with retry mechanisms. Arms A, B1, and B2 forfeit on first error.
 >
@@ -635,10 +631,10 @@ Maat/
 │   │   ├── [critic.py](http://critic.py)             # LLM critic (Condition C)
 │   │   ├── [explainer.py](http://explainer.py)          # LLM explainer (Condition E)
 │   │   ├── react_[agent.py](http://agent.py)        # ReAct orchestrator (Condition F)
-│   │   ├── [strategist.py](http://strategist.py)         # Planner (extension)
-│   │   ├── [tactician.py](http://tactician.py)          # Actor (extension)
-│   │   ├── [router.py](http://router.py)             # Phase router (extension)
-│   │   └── [specialists.py](http://specialists.py)        # Phase-specific experts (extension)
+│   │   ├── [strategist.py](http://strategist.py)         # Planner (Planner-Actor)
+│   │   ├── [tactician.py](http://tactician.py)          # Actor (Planner-Actor)
+│   │   ├── [observer.py](http://observer.py)            # Board describer (Observer-Executor)
+│   │   └── [executor.py](http://executor.py)            # Move selector (Observer-Executor)
 │   ├── graphs/
 │   │   ├── base_[graph.py](http://graph.py)         # Shared graph utilities
 │   │   ├── condition_[a.py](http://a.py)        # Direct LLM baseline (no LangGraph)
@@ -710,7 +706,7 @@ Maat/
 2. Implement Generation Strategy modules:
    - Generator (single LLM)
    - Planner-Actor (Strategist → Tactician)
-   - Router-Specialist (Router → phase Specialist)
+   - Observer-Executor (Observer → Executor)
 3. Implement Enforcement Pipelines:
    - Condition C (LLM Critic loop)
    - Condition D (Symbolic Validator loop)

@@ -100,6 +100,59 @@ def append_checkpoint(game_id: str, filepath: Path) -> None:
         fh.write(game_id + "\n")
 
 
+# ── Failed-item tracking ─────────────────────────────────────────────────
+
+
+def append_failed_item(
+    game_id: str,
+    error: str,
+    filepath: Path,
+) -> None:
+    """Append a failed item entry as a JSON line to *filepath*.
+
+    Each line is ``{"game_id": ..., "error": ..., "timestamp": ...}``.
+    Creates the file and parent directories if they don't exist.
+    """
+
+    import json
+    from datetime import datetime, timezone
+
+    filepath.parent.mkdir(parents=True, exist_ok=True)
+    entry = {
+        "game_id": game_id,
+        "error": error,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+    with filepath.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(entry) + "\n")
+
+    logger.info("Recorded failed item %s → %s", game_id, filepath.name)
+
+
+def load_failed_item_ids(filepath: Path) -> set[str]:
+    """Return the set of ``game_id`` values from a failed-items JSONL file.
+
+    Returns an empty set if the file does not exist.
+    """
+
+    import json
+
+    if not filepath.exists():
+        return set()
+
+    ids: set[str] = set()
+    with filepath.open("r", encoding="utf-8") as fh:
+        for line in fh:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            try:
+                ids.add(json.loads(stripped)["game_id"])
+            except (json.JSONDecodeError, KeyError):
+                pass
+    return ids
+
+
 # ── Summary CSV writer ───────────────────────────────────────────────────
 
 

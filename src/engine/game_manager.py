@@ -23,12 +23,7 @@ import chess
 from src.config import ModelConfig, config_for_condition
 from src.context import ConversationContext
 from src.engine.condition_dispatch import dispatch_turn
-from src.engine.result_store import (
-    append_checkpoint,
-    append_game_record,
-    load_checkpoint,
-    write_summary_csv,
-)
+from src.engine.result_store import write_summary_csv
 from src.engine.stockfish_wrapper import StockfishWrapper
 from src.metrics.collector import MetricsCollector
 from src.metrics.definitions import GameRecord
@@ -41,9 +36,11 @@ logger = logging.getLogger(__name__)
 
 
 def load_starting_positions(filepath: Path | str) -> list[str]:
-    """Load starting FEN strings from a text file (one per line).
+    """Load starting FEN strings from a text file or JSONL file.
 
-    Blank lines and lines starting with ``#`` are ignored.
+    Plain text files are treated as one FEN per line. JSONL rows may
+    contain either a top-level FEN string or an object with a ``fen``
+    field. Blank lines and comment lines starting with ``#`` are ignored.
     """
 
     path = Path(filepath)
@@ -52,6 +49,14 @@ def load_starting_positions(filepath: Path | str) -> list[str]:
         for line in fh:
             stripped = line.strip()
             if stripped and not stripped.startswith("#"):
+                if stripped.startswith("{"):
+                    row = json.loads(stripped)
+                    if isinstance(row, dict):
+                        fen = row.get("fen")
+                        if not isinstance(fen, str) or not fen.strip():
+                            raise ValueError(f"Invalid starting-position row in {path}: missing fen")
+                        fens.append(fen)
+                        continue
                 fens.append(stripped)
     return fens
 
@@ -107,8 +112,6 @@ class GameManager:
 
         self.input_mode: InputMode = "fen" if experiment == 2 else "history"
 
-        # Derived paths
-        self._checkpoint_path = self.output_dir / ".checkpoint"
 
     # ── Public API ───────────────────────────────────────────────────
 
@@ -122,7 +125,7 @@ class GameManager:
         """
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        completed = load_checkpoint(self._checkpoint_path)
+        completed: set[str] = set()
         all_records: list[GameRecord] = []
 
         sf = StockfishWrapper(
@@ -198,9 +201,6 @@ class GameManager:
     ) -> list[GameRecord]:
         """Play all games for *condition*, skipping checkpointed ones."""
 
-        results_path = (
-            self.output_dir / f"exp{self.experiment}_{condition}_results.jsonl"
-        )
         records: list[GameRecord] = []
 
         for idx, fen in enumerate(self.starting_positions):
@@ -227,9 +227,12 @@ class GameManager:
                 )
                 continue
 
-            # Persist
-            append_game_record(record, results_path)
-            append_checkpoint(game_id, self._checkpoint_path)
+            # Persist (skip if game was interrupted/stopped)
+            if record is None:
+                logger.info("[Exp%d] %s | Game %d/%d | stopped/paused — not recording",
+                            self.experiment, condition, idx + 1, len(self.starting_positions))
+                continue
+
             completed.add(game_id)
             records.append(record)
 
@@ -396,8 +399,8 @@ class GameManager:
                 })
 
         # ── Delete mid-game checkpoint on completion ──
-        final_checkpoint_dir = self.output_dir / ".midgame_checkpoints" / f"{condition}_{self.generation_strategy}"
-        final_checkpoint_path = final_checkpoint_dir / f"{gid}.json"
+        final_checkpoint_dir = self.output_dir / f"{self.generation_strategy}_{condition}" / "checkpoints"
+        final_checkpoint_path = final_checkpoint_dir / f"{gid}.jsonl"
         if final_checkpoint_path.exists():
             try:
                 final_checkpoint_path.unlink()
@@ -423,9 +426,9 @@ class GameManager:
 
     def _save_checkpoint_to_disk(self, condition: str, gid: str, starting_fen: str, board: chess.Board, collector: MetricsCollector, context: ConversationContext) -> None:
         """Helper to save the current board and memory to a mid-game checkpoint file."""
-        checkpoint_dir = self.output_dir / ".midgame_checkpoints" / f"{condition}_{self.generation_strategy}"
+        checkpoint_dir = self.output_dir / f"{self.generation_strategy}_{condition}" / "checkpoints"
+        checkpoint_path = checkpoint_dir / f"{gid}.jsonl"
         checkpoint_dir.mkdir(parents=True, exist_ok=True)
-        checkpoint_path = checkpoint_dir / f"{gid}.json"
         
         midgame_data = {
             "starting_fen": starting_fen,
@@ -437,7 +440,7 @@ class GameManager:
         }
         
         with open(checkpoint_path, "w", encoding="utf-8") as fh:
-            json.dump(midgame_data, fh, indent=2)
+            fh.write(json.dumps(midgame_data) + "\n")
 
     def _llm_turn(
         self,
@@ -454,8 +457,6 @@ class GameManager:
         fen = board.fen()
         move_history = [m.uci() for m in board.move_stack]
         move_number = board.fullmove_number
-
-        collector.start_turn()
 
         state = dispatch_turn(
             condition,

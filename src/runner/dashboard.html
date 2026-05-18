@@ -570,20 +570,33 @@
         <div class="card controls-panel">
             <div class="card-header"><span class="card-title">⚡ Controls</span></div>
             <div class="card-body">
-                <div class="exp-selector" id="exp-selector">
-                    <!-- Populated by JS -->
+                <div>
+                    <div class="strategy-label">🔬 Experiment</div>
+                    <select class="strategy-select" id="exp-select">
+                        <!-- Populated by JS -->
+                    </select>
+                </div>
+                <div>
+                    <div class="strategy-label">🏷️ Condition</div>
+                    <select class="strategy-select" id="cond-select">
+                        <option value="A">A</option><option value="B">B</option>
+                        <option value="C">C</option><option value="D">D</option>
+                        <option value="E">E</option><option value="F">F</option>
+                    </select>
                 </div>
                 <div>
                     <div class="strategy-label">♚ Generation Strategy</div>
                     <select class="strategy-select" id="gen-strategy">
                         <option value="generator_only">Generator Only</option>
                         <option value="planner_actor">Planner → Actor</option>
-                        <option value="threat_analyst">Threat Analyst</option>
+                        <option value="observer_strategist_tactician">Observer → Strategist → Tactician</option>
+                        <option value="observer_executor">Observer → Executor</option>
                     </select>
                 </div>
-                <div class="option-row">
-                    <input type="checkbox" id="parallel-exp">
-                    <label for="parallel-exp">Run experiments in parallel</label>
+                <div>
+                    <div class="strategy-label">⚡ Concurrent Runners</div>
+                    <input type="number" id="n-runners" value="5" min="1" max="20"
+                        class="strategy-select" style="appearance:auto; background-image:none">
                 </div>
                 <div class="btn-group">
                     <button class="btn btn-start" id="btn-start" onclick="startRun()">▶ Start</button>
@@ -633,37 +646,28 @@
                             <div class="gauge-sub" id="rpd-sub">/ 1500</div>
                         </div>
                         <div class="gauge-card">
-                            <div class="gauge-label">TPM</div>
-                            <div class="gauge-ring" id="gauge-tpm">
+                            <div class="gauge-label">Queue</div>
+                            <div class="gauge-ring">
                                 <svg viewBox="0 0 100 100">
                                     <circle class="bg" cx="50" cy="50" r="42"/>
-                                    <circle class="fill" cx="50" cy="50" r="42"
-                                        stroke="#f59e0b"
-                                        stroke-dasharray="263.9"
-                                        stroke-dashoffset="263.9"
-                                        id="tpm-fill"/>
                                 </svg>
-                                <div class="gauge-value" id="tpm-value">0</div>
+                                <div class="gauge-value" id="queue-value" style="font-size:18px">0</div>
                             </div>
-                            <div class="gauge-sub" id="tpm-sub">tokens/min</div>
+                            <div class="gauge-sub" id="queue-sub">pending</div>
                         </div>
                     </div>
                     <div class="metrics-row" style="margin-top:12px">
                         <div class="metric-card">
-                            <div class="metric-label">Next RPM Slot</div>
-                            <div class="metric-value" id="rpm-wait" style="font-size:16px">—</div>
+                            <div class="metric-label">API Keys</div>
+                            <div class="metric-value" id="num-keys" style="font-size:16px">0</div>
                         </div>
                         <div class="metric-card">
-                            <div class="metric-label">RPD Resets At</div>
-                            <div class="metric-value" id="rpd-reset" style="font-size:12px">—</div>
+                            <div class="metric-label">Total RPD</div>
+                            <div class="metric-value" id="total-rpd" style="font-size:16px">0</div>
                         </div>
                         <div class="metric-card">
-                            <div class="metric-label">Total Requests</div>
-                            <div class="metric-value" id="total-reqs" style="font-size:16px">0</div>
-                        </div>
-                        <div class="metric-card">
-                            <div class="metric-label">Tokens Today</div>
-                            <div class="metric-value" id="tokens-today" style="font-size:16px">0</div>
+                            <div class="metric-label">Manager</div>
+                            <div class="metric-value" id="mgr-status" style="font-size:12px">—</div>
                         </div>
                     </div>
                 </div>
@@ -748,6 +752,7 @@ let experimentConfigs = [];
 const apiLogEntries = [];
 const errorEntries = [];
 const moveResults = [];
+const activeWorkers = new Map(); // game_id → worker info
 const MAX_LOG = 200;
 
 // ═══════════════════════════════════════════════════════════════════
@@ -783,46 +788,10 @@ async function loadExperiments() {
 }
 
 function renderExpSelector() {
-    const container = document.getElementById('exp-selector');
-    container.innerHTML = experimentConfigs.map(exp => `
-        <div class="exp-group">
-            <div class="exp-group-header">
-                <input type="checkbox" id="exp-${exp.id}" checked onchange="toggleExpConditions(${exp.id})">
-                <label for="exp-${exp.id}">Experiment ${exp.id}</label>
-                <span style="font-size:11px; color:var(--text-muted)">${exp.description}</span>
-            </div>
-            <div class="conditions-grid" id="conds-${exp.id}">
-                ${exp.conditions.map(c => `
-                    <input type="checkbox" class="cond-chip" id="cond-${exp.id}-${c}" checked>
-                    <label for="cond-${exp.id}-${c}">${c}</label>
-                `).join('')}
-            </div>
-        </div>
-    `).join('');
-}
-
-function toggleExpConditions(expId) {
-    const checked = document.getElementById(`exp-${expId}`).checked;
-    const conds = document.querySelectorAll(`#conds-${expId} .cond-chip`);
-    conds.forEach(c => c.checked = checked);
-}
-
-function getSelectedExperiments() {
-    const result = [];
-    for (const exp of experimentConfigs) {
-        const expChecked = document.getElementById(`exp-${exp.id}`)?.checked;
-        if (!expChecked) continue;
-        const conditions = [];
-        for (const c of exp.conditions) {
-            if (document.getElementById(`cond-${exp.id}-${c}`)?.checked) {
-                conditions.push(c);
-            }
-        }
-        if (conditions.length > 0) {
-            result.push({ id: exp.id, conditions });
-        }
-    }
-    return result;
+    const select = document.getElementById('exp-select');
+    select.innerHTML = experimentConfigs.map(exp =>
+        `<option value="${exp.id}">Experiment ${exp.id} — ${exp.description}</option>`
+    ).join('');
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -869,9 +838,28 @@ function handleWSMessage(data) {
         return;
     }
 
-    // Worker events → update progress
+    // Worker events → update log + workers table
     if (['puzzle_complete', 'game_complete', 'game_turn', 'worker_status', 'worker_error'].includes(type)) {
         addApiLogEntry(data);
+    }
+
+    // Track active workers from real-time events
+    if (type === 'worker_status' && data.game_id) {
+        activeWorkers.set(data.game_id, {
+            game_id: data.game_id,
+            experiment: data.experiment,
+            condition: data.condition,
+            status: data.status || 'running',
+            detail: data.detail || '',
+            started: Date.now() / 1000,
+        });
+        renderActiveWorkers();
+    }
+
+    // Remove workers on completion or error
+    if ((type === 'puzzle_complete' || type === 'game_complete' || type === 'worker_error') && data.game_id) {
+        activeWorkers.delete(data.game_id);
+        renderActiveWorkers();
     }
 
     // Move results
@@ -885,9 +873,14 @@ function handleWSMessage(data) {
         addErrorEntry(data);
     }
 
+    // Lifecycle events → refresh full status
     if (['run_started', 'run_paused', 'run_resumed', 'run_stopping', 'run_finished'].includes(type)) {
         addApiLogEntry({ ...data, timestamp: new Date().toISOString() });
-        pollStatus(); // Refresh full status
+        if (type === 'run_finished' || type === 'run_stopping') {
+            activeWorkers.clear();
+            renderActiveWorkers();
+        }
+        pollStatus();
     }
 }
 
@@ -906,19 +899,21 @@ setInterval(pollStatus, 5000);
 // ═══════════════════════════════════════════════════════════════════
 
 async function startRun() {
-    const experiments = getSelectedExperiments();
-    if (experiments.length === 0) {
-        alert('Select at least one experiment and condition.');
+    const experiment = parseInt(document.getElementById('exp-select').value);
+    const condition = document.getElementById('cond-select').value;
+    const genStrategy = document.getElementById('gen-strategy').value;
+    const nRunners = parseInt(document.getElementById('n-runners').value) || 5;
+
+    if (!experiment || !condition) {
+        alert('Select an experiment and condition.');
         return;
     }
-    const parallel = document.getElementById('parallel-exp').checked;
-    const genStrategy = document.getElementById('gen-strategy').value;
 
     try {
         const res = await fetch('/api/start', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ experiments, parallel_experiments: parallel, generation_strategy: genStrategy }),
+            body: JSON.stringify({ experiment, condition, generation_strategy: genStrategy, n_runners: nRunners }),
         });
         const data = await res.json();
         if (data.error) alert(data.error);
@@ -936,7 +931,7 @@ async function resumeRun() {
 }
 
 async function stopRun() {
-    if (confirm('Stop all experiments? Progress will be saved for resume.')) {
+    if (confirm('Stop the run? Mid-game progress will be checkpointed.')) {
         await fetch('/api/stop', { method: 'POST' });
     }
 }
@@ -951,8 +946,16 @@ function updateFullStatus(data) {
     updateButtons(currentStatus);
 
     if (data.rate_limits) updateRateLimits(data.rate_limits);
-    if (data.experiments) updateProgress(data.experiments);
-    if (data.active_workers) updateWorkers(data.active_workers);
+    updateProgress(data);
+
+    // Update workers from server snapshot (authoritative source)
+    if (data.workers) {
+        activeWorkers.clear();
+        for (const w of data.workers) {
+            activeWorkers.set(w.game_id, w);
+        }
+        renderActiveWorkers();
+    }
 }
 
 function updateStatusBadge(status) {
@@ -976,73 +979,78 @@ function updateButtons(status) {
 function updateRateLimits(rl) {
     const circumference = 263.9;
 
-    // RPM gauge
-    const rpmRatio = Math.min(rl.rpm_current / Math.max(rl.rpm_limit, 1), 1);
+    // Determine limits from first key (all keys share same limits)
+    const rpmLimit = (rl.keys && rl.keys.length > 0) ? rl.keys[0].rpm_limit : 15;
+    const rpdLimit = (rl.keys && rl.keys.length > 0) ? rl.keys[0].rpd_limit : 1500;
+
+    // RPM gauge (total across all keys)
+    const rpmVal = rl.total_rpm || 0;
+    const rpmRatio = Math.min(rpmVal / Math.max(rpmLimit, 1), 1);
     document.getElementById('rpm-fill').style.strokeDashoffset = circumference * (1 - rpmRatio);
-    document.getElementById('rpm-value').textContent = rl.rpm_current;
-    document.getElementById('rpm-sub').textContent = `/ ${rl.rpm_limit}`;
+    document.getElementById('rpm-value').textContent = rpmVal;
+    document.getElementById('rpm-sub').textContent = `/ ${rpmLimit}`;
     document.getElementById('rpm-fill').setAttribute('stroke', rpmRatio > 0.8 ? '#ef4444' : rpmRatio > 0.5 ? '#f59e0b' : '#6366f1');
 
-    // RPD gauge
-    const rpdRatio = Math.min(rl.rpd_current / Math.max(rl.rpd_limit, 1), 1);
+    // RPD gauge (total across all keys)
+    const rpdVal = rl.total_rpd || 0;
+    const totalRpdLimit = rpdLimit * (rl.num_keys || 1);
+    const rpdRatio = Math.min(rpdVal / Math.max(totalRpdLimit, 1), 1);
     document.getElementById('rpd-fill').style.strokeDashoffset = circumference * (1 - rpdRatio);
-    document.getElementById('rpd-value').textContent = rl.rpd_current;
-    document.getElementById('rpd-sub').textContent = `/ ${rl.rpd_limit}`;
+    document.getElementById('rpd-value').textContent = rpdVal;
+    document.getElementById('rpd-sub').textContent = `/ ${totalRpdLimit}`;
     document.getElementById('rpd-fill').setAttribute('stroke', rpdRatio > 0.8 ? '#ef4444' : rpdRatio > 0.5 ? '#f59e0b' : '#22c55e');
 
-    // TPM gauge (max at 50000 for visual scale)
-    const tpmMax = rl.tpm_limit || 50000;
-    const tpmRatio = Math.min(rl.tpm_current / tpmMax, 1);
-    document.getElementById('tpm-fill').style.strokeDashoffset = circumference * (1 - tpmRatio);
-    document.getElementById('tpm-value').textContent = formatNumber(rl.tpm_current);
+    // Queue size
+    document.getElementById('queue-value').textContent = rl.queue_size || 0;
 
     // Info cards
-    document.getElementById('rpm-wait').textContent = rl.next_rpm_slot_seconds > 0 ? `${rl.next_rpm_slot_seconds}s` : 'Ready';
-    document.getElementById('rpm-wait').style.color = rl.next_rpm_slot_seconds > 0 ? 'var(--warning)' : 'var(--success)';
-    document.getElementById('rpd-reset').textContent = rl.rpd_resets_at ? new Date(rl.rpd_resets_at).toLocaleTimeString() : '—';
-    document.getElementById('total-reqs').textContent = formatNumber(rl.total_requests);
-    document.getElementById('tokens-today').textContent = formatNumber(rl.tokens_today);
+    document.getElementById('num-keys').textContent = rl.num_keys || 0;
+    document.getElementById('total-rpd').textContent = formatNumber(rpdVal);
+    const mgrEl = document.getElementById('mgr-status');
+    if (rl.paused) {
+        mgrEl.textContent = 'PAUSED';
+        mgrEl.style.color = 'var(--warning)';
+    } else {
+        mgrEl.textContent = 'Active';
+        mgrEl.style.color = 'var(--success)';
+    }
 }
 
-function updateProgress(experiments) {
+function updateProgress(data) {
     const container = document.getElementById('progress-container');
+    const p = data.progress;
 
-    if (Object.keys(experiments).length === 0) {
+    if (!p || !data.experiment || data.status === 'idle') {
         container.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><div>No experiments running</div></div>';
         return;
     }
 
-    let html = '';
-    for (const [expId, exp] of Object.entries(experiments)) {
-        const statusEmoji = exp.status === 'running' ? '🟢' : exp.status === 'completed' ? '✅' : exp.status === 'paused' ? '🟡' : '⏹️';
-        html += `<div class="progress-section">
+    const pct = p.total > 0 ? Math.round((p.completed / p.total) * 100) : 0;
+    const failed = p.failed || 0;
+    const statusEmoji = data.status === 'running' ? '🟢' : data.status === 'completed' ? '✅' : data.status === 'paused' ? '🟡' : '⏹️';
+    const failedBadge = failed > 0 ? ` · <span style="color:var(--danger)">${failed} failed</span>` : '';
+
+    container.innerHTML = `
+        <div class="progress-section">
             <div class="progress-exp-header">
                 ${statusEmoji}
-                <span>Experiment ${exp.experiment}</span>
-                <span class="status-badge status-${exp.status}" style="font-size:10px; padding:2px 8px">${exp.status}</span>
-            </div>`;
-
-        if (exp.conditions) {
-            for (const [cond, cp] of Object.entries(exp.conditions)) {
-                const pct = cp.total > 0 ? Math.round((cp.completed / cp.total) * 100) : 0;
-                html += `
-                <div class="progress-condition">
-                    <div class="progress-condition-header">
-                        <span class="progress-condition-label">Condition ${cp.condition}</span>
-                        <span class="progress-stats">${cp.completed}/${cp.total} (${pct}%) · ${cp.in_progress} active · ${cp.failed} failed</span>
-                    </div>
-                    <div class="progress-bar-track">
-                        <div class="progress-bar-fill" style="width:${pct}%"></div>
-                    </div>
-                </div>`;
-            }
-        }
-        html += '</div>';
-    }
-    container.innerHTML = html;
+                <span>Experiment ${data.experiment} · Condition ${data.condition}</span>
+                <span class="status-badge status-${data.status}" style="font-size:10px; padding:2px 8px">${data.status}</span>
+            </div>
+            <div class="progress-condition">
+                <div class="progress-condition-header">
+                    <span class="progress-condition-label">${data.generation_strategy || 'generator_only'}</span>
+                    <span class="progress-stats">${p.completed}/${p.total} (${pct}%) · ${p.in_progress} active · ${p.remaining} remaining${failedBadge}</span>
+                </div>
+                <div class="progress-bar-track">
+                    <div class="progress-bar-fill" style="width:${pct}%"></div>
+                </div>
+            </div>
+        </div>`;
 }
 
-function updateWorkers(workers) {
+function renderActiveWorkers() {
+    const workers = Array.from(activeWorkers.values());
     const container = document.getElementById('workers-container');
     document.getElementById('worker-count').textContent = `${workers.length} active`;
 
@@ -1051,7 +1059,7 @@ function updateWorkers(workers) {
         return;
     }
 
-    let html = '<table class="workers-table"><thead><tr><th>ID</th><th>Exp</th><th>Cond</th><th>Status</th><th>Elapsed</th></tr></thead><tbody>';
+    let html = '<table class="workers-table"><thead><tr><th>ID</th><th>Exp</th><th>Cond</th><th>Status</th><th>Detail</th><th>Elapsed</th></tr></thead><tbody>';
     const now = Date.now() / 1000;
     for (const w of workers) {
         const elapsed = w.started ? Math.round(now - w.started) : 0;
@@ -1061,11 +1069,19 @@ function updateWorkers(workers) {
             <td>Exp ${w.experiment}</td>
             <td>${w.condition}</td>
             <td class="${statusClass}">${w.status || '—'}</td>
+            <td>${w.detail || '—'}</td>
             <td>${formatDuration(elapsed)}</td>
         </tr>`;
     }
     html += '</tbody></table>';
     container.innerHTML = html;
+}
+
+// Legacy alias — kept for backward compatibility
+function updateWorkers(workers) {
+    activeWorkers.clear();
+    for (const w of workers) activeWorkers.set(w.game_id, w);
+    renderActiveWorkers();
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1161,12 +1177,13 @@ function escapeHtml(str) {
 function addMoveResult(data) {
     const valid = data.is_valid;
     const move = data.proposed_move || '—';
-    const response = data.raw_llm_response || '';
+    const difficulty = data.puzzle_difficulty || 'unknown';
+    const phase = data.game_phase || 'unknown';
     const gameId = data.game_id || '?';
     const cond = data.condition || '?';
     const exp = data.experiment || '?';
 
-    moveResults.push({ valid, move, response, gameId, cond, exp, time: new Date().toLocaleTimeString() });
+    moveResults.push({ valid, move, difficulty, phase, gameId, cond, exp, time: new Date().toLocaleTimeString() });
     if (moveResults.length > MAX_LOG) moveResults.shift();
 
     document.getElementById('move-count').textContent = `${moveResults.length} moves`;
@@ -1181,12 +1198,14 @@ function renderMoveResults() {
         const cls = m.valid ? 'valid' : 'invalid';
         const icon = m.valid ? '\u2714' : '\u2718';
         const valCls = m.valid ? 'ok' : 'fail';
-        const shortResp = m.response.length > 60 ? m.response.substring(0, 60) + '\u2026' : m.response;
-        return `<div class="move-result ${cls}" title="${escapeHtml(m.response)}">
+        const difficultyCapitalized = m.difficulty.charAt(0).toUpperCase() + m.difficulty.slice(1);
+        const phaseCapitalized = m.phase.charAt(0).toUpperCase() + m.phase.slice(1);
+        const difficultyPhase = `${difficultyCapitalized} - ${phaseCapitalized}`;
+        return `<div class="move-result ${cls}" title="${escapeHtml(difficultyPhase)}">
             <span class="move-icon">${icon}</span>
             <span class="move-cond">E${m.exp}${m.cond}</span>
             <span class="move-val ${valCls}">${escapeHtml(m.move)}</span>
-            <span class="move-response">${escapeHtml(shortResp)}</span>
+            <span class="move-response">${escapeHtml(difficultyPhase)}</span>
             <span class="log-time">${m.time}</span>
         </div>`;
     }).join('');

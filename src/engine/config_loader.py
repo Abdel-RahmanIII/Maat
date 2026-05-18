@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 import yaml
 
-from src.config import ModelConfig
+from src.config import LLMCallMode, ModelConfig
 
 if TYPE_CHECKING:
     from src.engine.game_manager import GameManager
@@ -51,10 +51,12 @@ def load_experiment_config(yaml_path: str | Path) -> dict[str, Any]:
 
     # Build ModelConfig
     model_raw = raw.get("model", {})
+    raw_call_mode = model_raw.get("call_mode", "direct")
     model_config = ModelConfig(
         model_name=model_raw.get("model_name", "gemma-4-31b-it"),
         temperature=model_raw.get("temperature", 0.0),
         max_output_tokens=model_raw.get("max_output_tokens", 1024),
+        call_mode=LLMCallMode(raw_call_mode),
     )
 
     config: dict[str, Any] = {
@@ -109,9 +111,6 @@ def build_puzzle_manager_from_config(
         model_config=config["model_config"],
         generation_strategy=config["generation_strategy"],
         delay_seconds=config["delay_seconds"],
-        max_api_retries=config["max_api_retries"],
-        backoff_base=config["backoff_base"],
-        backoff_max=config["backoff_max"],
     )
 
 
@@ -135,7 +134,4 @@ def build_game_manager_from_config(
         model_config=config["model_config"],
         generation_strategy=config["generation_strategy"],
         delay_seconds=config["delay_seconds"],
-        max_api_retries=config["max_api_retries"],
-        backoff_base=config["backoff_base"],
-        backoff_max=config["backoff_max"],
     )

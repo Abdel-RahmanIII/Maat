@@ -6,13 +6,14 @@ No retries.  Establishes the raw LLM capability floor.
 
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import cast
 
 from src.config import ModelConfig
 from src.context import ConversationContext
-from src.graph.base_graph import snapshot_turn_result
+from src.graph.base_graph import persist_successful_turn_context, snapshot_turn_result
 from src.graph.generation import build_generation_subgraph
 from src.state import InputMode, TurnState, create_initial_turn_state
+from src.validators.symbolic import validate_move
 
 
 def run_condition_a(
@@ -53,7 +54,20 @@ def run_condition_a(
     if not state["is_valid"]:
         state["game_status"] = "forfeit"
     else:
-        state["game_status"] = "ongoing"
+        result = validate_move(state["board_fen"], state["proposed_move"])
+        error_types = list(state["error_types"])
+        if not result["valid"] and result["error_type"]:
+            error_types.append(result["error_type"])
+
+        state["is_valid"] = result["valid"]
+        if state["total_attempts"] == 1:
+            state["first_try_valid"] = result["valid"]
+        state["ground_truth_verdict"] = result["valid"]
+        state["error_reason"] = result["reason"]
+        state["error_types"] = error_types
+        state["game_status"] = "ongoing" if result["valid"] else "forfeit"
+        if result["valid"]:
+            persist_successful_turn_context(state, context)
 
     state["turn_results"].append(snapshot_turn_result(state))
     return state

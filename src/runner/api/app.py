@@ -68,14 +68,9 @@ def create_app() -> FastAPI:
 
     # Load configuration
     runner_cfg = _load_runner_config()
-    rate_cfg = runner_cfg.get("rate_limits", {})
-    concurrency_cfg = runner_cfg.get("concurrency", {})
 
     # Create orchestrator
     orchestrator = Orchestrator(
-        max_concurrent_per_condition=concurrency_cfg.get(
-            "max_concurrent_per_condition", 5
-        ),
         on_event=_manager.broadcast_sync,
     )
 
@@ -147,8 +142,9 @@ def create_app() -> FastAPI:
     async def rate_limits() -> JSONResponse:
         from src.runner.requests.manager import get_global_manager
         rm = get_global_manager()
-        status = {"status": "Running"} if rm else {"status": "Stopped"}
-        return JSONResponse(status)
+        if rm:
+            return JSONResponse(rm.get_status())
+        return JSONResponse({"status": "Stopped"})
 
     @app.get("/api/experiments")
     async def list_experiments() -> JSONResponse:
@@ -238,8 +234,11 @@ def main() -> None:
 
     logging.basicConfig(
         level=logging.INFO,
-        format="%(asctime)s | %(name)s | %(levelname)s | %(message)s",
+        format="%(levelname)s: %(message)s",
     )
+    logging.getLogger("google_genai.models").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.ERROR)
+
 
     runner_cfg = _load_runner_config()
     server_cfg = runner_cfg.get("server", {})

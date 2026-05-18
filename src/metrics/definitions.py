@@ -39,7 +39,7 @@ class TurnRecord(BaseModel):
     ground_truth_verdict: bool | None = None
     generation_strategy: str = "generator_only"
     strategic_plan: str = ""
-    threat_report: str = ""
+    observation_summary: str = ""
     feedback_history: list[str] = Field(default_factory=list)
 
     # Fields populated by the MetricsCollector

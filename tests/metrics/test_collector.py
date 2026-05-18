@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import time
-
 import pytest
 
 from src.metrics.collector import MetricsCollector, infer_game_phase
@@ -62,6 +60,7 @@ def _make_state(
     total_attempts: int = 1,
     llm_calls: int = 1,
     tokens: int = 200,
+    wall_clock_ms: float = 0.0,
     error_types: list[str] | None = None,
     game_status: GameStatus = "ongoing",
     condition: str = "D",
@@ -78,6 +77,7 @@ def _make_state(
     state["total_attempts"] = total_attempts
     state["llm_calls_this_turn"] = llm_calls
     state["tokens_this_turn"] = tokens
+    state["wall_clock_ms"] = wall_clock_ms
     state["proposed_move"] = "e2e4"
     state["error_types"] = error_types or []
     state["game_status"] = game_status
@@ -106,22 +106,19 @@ class TestMetricsCollector:
         assert record.is_valid is True
         assert record.game_phase == "opening"
 
-    def test_wall_clock_ms_positive(self):
+    def test_wall_clock_ms_uses_state_value(self):
         collector = MetricsCollector(
             game_id="test_002",
             condition="B",
             experiment=1,
         )
 
-        state = _make_state()
-        collector.start_turn()
-        # Tiny sleep to ensure measurable time
-        time.sleep(0.005)
+        state = _make_state(wall_clock_ms=37.5)
         record = collector.end_turn(state)
 
-        assert record.wall_clock_ms > 0.0
+        assert record.wall_clock_ms == pytest.approx(37.5)
 
-    def test_wall_clock_ms_zero_without_start(self):
+    def test_wall_clock_ms_zero_when_missing_from_state(self):
         collector = MetricsCollector(
             game_id="test_003",
             condition="A",
@@ -129,7 +126,6 @@ class TestMetricsCollector:
         )
 
         state = _make_state()
-        # No start_turn() call
         record = collector.end_turn(state)
         assert record.wall_clock_ms == 0.0
 

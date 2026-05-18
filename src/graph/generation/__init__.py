@@ -4,8 +4,10 @@ Three strategies are available:
 
 - **Generator (G)**: Single LLM baseline — one call per attempt.
 - **Planner-Actor (PA)**: Strategy → Tactics decomposition — two calls.
-- **Threat-Analyst (TA)**: Analysis → Execution decomposition — two calls.
-  Replaced the former Router-Specialist strategy.
+- **Observer-Strategist-Tactician (OST)**: Observation → Strategy → Tactics decomposition — three calls.
+- **Observer-Executor (OE)**: Observation → Execution decomposition — two calls.
+  The Observer describes the board; the Executor selects a move based on
+  that description.
 
 Each strategy is a compiled LangGraph StateGraph that takes TurnState as
 input and outputs TurnState with ``proposed_move``, ``is_valid``,

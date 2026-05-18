@@ -4,8 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
+import chess
+
+from src.context import ConversationContext
 from src.state import TurnState
-from src.validators.move_parser import parse_uci_move
+from src.validators.move_parser import parse_san_move, parse_uci_move
 from src.validators.symbolic import validate_move
 
 
@@ -20,6 +23,15 @@ def parse_and_validate(raw_output: str, fen: str) -> dict[str, Any]:
     """
 
     parse_result = parse_uci_move(raw_output)
+
+    if not parse_result["is_valid"]:
+        try:
+            board = chess.Board(fen)
+        except ValueError:
+            board = None
+
+        if board is not None:
+            parse_result = parse_san_move(raw_output, board)
 
     if not parse_result["is_valid"]:
         return {
@@ -38,6 +50,42 @@ def parse_and_validate(raw_output: str, fen: str) -> dict[str, Any]:
         "is_valid": val_result["valid"],
         "error_type": val_result["error_type"],
         "error_reason": val_result["reason"],
+        "used_fallback": parse_result["used_fallback"],
+    }
+
+
+def parse_only(raw_output: str, fen: str) -> dict[str, Any]:
+    """Parse a raw LLM output and return a normalized move without validation.
+
+    Returns a dict with ``proposed_move``, ``is_valid`` (parse success),
+    ``error_type``, ``error_reason``, and ``used_fallback``.
+    """
+
+    parse_result = parse_uci_move(raw_output)
+
+    if not parse_result["is_valid"]:
+        try:
+            board = chess.Board(fen)
+        except ValueError:
+            board = None
+
+        if board is not None:
+            parse_result = parse_san_move(raw_output, board)
+
+    if not parse_result["is_valid"]:
+        return {
+            "proposed_move": raw_output.strip()[:20],
+            "is_valid": False,
+            "error_type": parse_result["error_type"],
+            "error_reason": parse_result["reason"] or "Could not parse move.",
+            "used_fallback": parse_result["used_fallback"],
+        }
+
+    return {
+        "proposed_move": parse_result["move_uci"],
+        "is_valid": True,
+        "error_type": None,
+        "error_reason": "",
         "used_fallback": parse_result["used_fallback"],
     }
 
@@ -64,11 +112,26 @@ def snapshot_turn_result(state: TurnState) -> dict[str, Any]:
         "ground_truth_verdict": state.get("ground_truth_verdict"),
         "generation_strategy": state.get("generation_strategy", "generator_only"),
         "strategic_plan": state.get("strategic_plan", ""),
-        "threat_report": state.get("threat_report", ""),
+        "observation_summary": state.get("observation_summary", ""),
         "feedback_history": list(state["feedback_history"]),
         "wall_clock_ms": state.get("wall_clock_ms", 0.0),
         "game_phase": state.get("game_phase", ""),
         "board_fen": state["board_fen"],
         "raw_llm_response": state.get("raw_llm_response", ""),
     }
+
+
+def persist_successful_turn_context(
+    state: TurnState,
+    context: ConversationContext | None,
+) -> None:
+    """Persist only the final successful attempt messages for next-turn context."""
+
+    if context is None:
+        return
+
+    pending = state.get("messages", {})
+    for agent_id, messages in pending.items():
+        if messages:
+            context.add_turn_messages(agent_id, list(messages))
 

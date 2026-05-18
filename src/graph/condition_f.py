@@ -21,6 +21,7 @@ Graph topology::
 
 from __future__ import annotations
 
+import time
 from typing import Any, cast
 
 from langchain_core.messages import AIMessage
@@ -35,7 +36,7 @@ from src.agents.react_agent import (
 from src.config import ModelConfig
 from src.context import ConversationContext
 from src.graph.base_graph import parse_and_validate, snapshot_turn_result
-from src.llm.llm_client import get_model_with_tools
+from src.llm.llm_client import invoke_llm_timed
 from src.state import InputMode, TurnState, create_initial_turn_state
 from src.tools.chess_tools import get_tools_for_input_mode
 
@@ -52,7 +53,6 @@ def build_graph(
 
     selected_tools = get_tools_for_input_mode(input_mode)
     tool_map: dict[str, Any] = {tool.name: tool for tool in selected_tools}
-    model = get_model_with_tools(selected_tools, model_config)
 
     # ── Nodes ─────────────────────────────────────────────────────────
 
@@ -60,7 +60,7 @@ def build_graph(
         """Invoke the tool-bound LLM with the current message history."""
 
         messages = list(state["messages"])
-        response: AIMessage = model.invoke(messages)
+        response, elapsed_ms = invoke_llm_timed(messages, model_config, tools=selected_tools)
         usage = response.usage_metadata or {}
 
         # Capture raw AI response text
@@ -90,6 +90,7 @@ def build_graph(
                 state["prompt_token_count"]
                 + usage.get("input_tokens", 0)
             ),
+            "wall_clock_ms": state["wall_clock_ms"] + elapsed_ms,
             "raw_llm_response": new_raw,
         }
 
@@ -102,7 +103,9 @@ def build_graph(
         ai_tool_calls = getattr(last_msg, "tool_calls", []) or []
 
         # Execute tool calls
+        tool_start = time.perf_counter()
         tool_messages = execute_tool_calls(ai_tool_calls, tool_map)
+        tool_elapsed_ms = (time.perf_counter() - tool_start) * 1000
         messages.extend(tool_messages)
 
         # Build tool call log entries
@@ -123,6 +126,7 @@ def build_graph(
         return {
             "messages": messages,
             "tool_calls": tool_calls_log,
+            "wall_clock_ms": state["wall_clock_ms"] + tool_elapsed_ms,
         }
 
     def _ground_truth_node(state: TurnState) -> dict[str, Any]:
@@ -273,7 +277,9 @@ def build_graph(
         # the message history consistent
         last_msg = messages[-1]
         ai_tool_calls = getattr(last_msg, "tool_calls", []) or []
+        tool_start = time.perf_counter()
         tool_messages = execute_tool_calls(ai_tool_calls, tool_map)
+        tool_elapsed_ms = (time.perf_counter() - tool_start) * 1000
 
         updated_messages = list(messages) + list(tool_messages)
 
@@ -296,6 +302,7 @@ def build_graph(
             "messages": updated_messages,
             "proposed_move": submitted,
             "tool_calls": tool_calls_log,
+            "wall_clock_ms": state["wall_clock_ms"] + tool_elapsed_ms,
         }
 
     # ── Assemble graph ────────────────────────────────────────────────
@@ -376,7 +383,15 @@ def run_condition_f(
     state["max_react_steps"] = max_steps
 
     # Build initial messages for the agent
-    history = context.get_history("react") if context else None
+    history = (
+        context.get_history(
+            "react",
+            tokens_used_so_far=state["prompt_token_count"],
+            tokenizer_name=model_config.model_name if model_config else None,
+        )
+        if context
+        else None
+    )
     state["messages"] = build_react_messages(
         fen=fen,
         move_history=list(move_history or []),
@@ -385,4 +400,10 @@ def run_condition_f(
     )
 
     compiled = build_graph(model_config, input_mode, context)
-    return cast(TurnState, compiled.invoke(state))
+    result = cast(TurnState, compiled.invoke(state))
+
+    # Persist the full unified message thread for next turn's context only if move is valid
+    if context and result.get("messages") and result.get("is_valid"):
+        context.add_turn_messages("react", list(result["messages"]))
+
+    return result
